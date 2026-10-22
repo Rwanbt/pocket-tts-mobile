@@ -107,9 +107,9 @@ fn main() -> Result<()> {
     let mut index = Vec::new();
     for text in &args.texts {
         for frames in &args.frames {
-            engine
-                .set_text_options(*frames, false, true, 50)
-                .context("the pack rejected the text options")?;
+            // Use the model's default text options (from the config), which are correct for French.
+            // The frames_after_eos is passed separately to the generation function.
+            // No need to call set_text_options - the model uses its default text options from the config.
             let start = Instant::now();
             let mut first = None;
             let mut total = 0usize;
