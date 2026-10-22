@@ -1,8 +1,19 @@
 # Pocket TTS Mobile (Rust)
 
-> **Statut** : Work in Progress (Phase 0)
+> **Statut** : Work in Progress (Phase 1 - spike technique)
 > **Objectif** : Porter le runtime Rust officiel de Pocket TTS (Kyutai) sur Android pour Unifia.
+> **Pilotage** : [Rwanbt/unifia#872](https://github.com/Rwanbt/unifia/issues/872) — *Porter le runtime Rust de Pocket TTS sur Android*
 > **Plan** : [PLAN-Portage-Rust-Pocket-TTS-Mobile-2026-10-22.md](../../projects/unifia/operations/PLAN-Portage-Rust-Pocket-TTS-Mobile-2026-10-22.md)
+
+### Suivi des phases
+
+| Phase | Ticket | Objet |
+|-------|--------|-------|
+| 1 | [#873](https://github.com/Rwanbt/unifia/issues/873) | Spike : build du moteur, WAV français, mesures Mi 10 Pro |
+| 2 | [#874](https://github.com/Rwanbt/unifia/issues/874) | Comparatif 24L int8 / 6L fp32 / 24L q8 |
+| 3 | [#875](https://github.com/Rwanbt/unifia/issues/875) | Intégration dans l'app mobile (ABI, logs, CI) |
+| 4 | [#876](https://github.com/Rwanbt/unifia/issues/876) | Qualification (gate FR, 6 gestes, ADR-059) |
+| 5 | [#877](https://github.com/Rwanbt/unifia/issues/877) | Propositions upstream (xn-ptts, Kyutai) |
 
 ---
 
