@@ -42,12 +42,12 @@ pub mod eos;
 
 // Réexporter les types publics pour l'ABI
 pub use ffi::{
-    ptt_create, ptt_destroy, ptt_free_audio, ptt_set_text_options, ptt_stream_end,
-    ptt_stream_read, ptt_stream_start, ptt_warmup,
+    ptt_create, ptt_destroy, ptt_free_audio, ptt_set_text_options, ptt_stream_end, ptt_stream_read,
+    ptt_stream_start, ptt_warmup,
 };
-
-/// Version du crate (pour compatibilité ABI)
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Nom du crate
 pub const NAME: &str = env!("CARGO_PKG_NAME");
+
+/// Version du crate (pour compatibilité ABI)
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
