@@ -1,0 +1,31 @@
+# Rust
+/target
+*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android
+/android
+*.apk
+*.aab
+
+# Build artifacts
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local

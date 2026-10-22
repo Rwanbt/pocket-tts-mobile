@@ -1,0 +1,42 @@
+MIT License
+
+Copyright (c) 2026 Unifia
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-Party Licenses
+
+This project includes or depends on the following third-party components:
+
+### ptts / xn-ptts (Gradium)
+- **License**: MIT OR Apache-2.0
+- **Source**: https://github.com/gradium-ai/xn-ptts
+- **Fork used**: https://github.com/gabrieldemarmiesse/xn-ptts (rev 7efa26973f81bba42cf2ace8da2c1eb9b605d54d)
+
+### pocket-tts (Kyutai)
+- **License**: MIT
+- **Source**: https://github.com/kyutai-labs/pocket-tts
+- **Files adapted**: `rust/src/config.rs`, `rust/src/text.rs`, `rust/src/model.rs`, `rust/src/tokenizer.rs`, `rust/src/weights.rs`, `rust/src/rng.rs`
+
+### Model Weights (Kyutai)
+- **License**: CC BY 4.0
+- **Source**: https://huggingface.co/kyutai/pocket-tts-without-voice-cloning
+- **Attribution**: Kyutai Labs
