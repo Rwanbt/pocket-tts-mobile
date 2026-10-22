@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Erwan Barat <erwan.barat@example.com>"]
 description = "Pocket TTS Rust engine for Android - Unifia mobile port"
 license = "MIT"
-repository = "https://github.com/unifia/pocket-tts-mobile"
+repository = "https://github.com/Rwanbt/pocket-tts-mobile"
 readme = "README.md"
 publish = false
 

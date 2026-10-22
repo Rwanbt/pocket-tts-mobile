@@ -220,5 +220,5 @@ Ce projet est conçu pour être **proposé en amont** :
 ## 📞 Contact
 
 - **Propriétaire** : Erwan Barat (`@erwanbarat`)
-- **Repo** : [unifia/pocket-tts-mobile](https://github.com/unifia/pocket-tts-mobile)
+- **Repo** : [Rwanbt/pocket-tts-mobile](https://github.com/Rwanbt/pocket-tts-mobile)
 - **Issues** : [Rwanbt/unifia#](https://github.com/Rwanbt/unifia/issues) (Épic : Portage Rust Pocket TTS)

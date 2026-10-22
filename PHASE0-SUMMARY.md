@@ -4,7 +4,7 @@
 
 ### Repository Created
 - **Location**: `D:\App\unifia\pocket-tts-mobile` (local)
-- **GitHub Target**: `unifia/pocket-tts-mobile` (to be pushed)
+- **GitHub Target**: `Rwanbt/pocket-tts-mobile` (to be pushed)
 - **License**: MIT
 - **Initial Commit**: `7e1e91d`
 
@@ -86,7 +86,7 @@ pocket-tts-mobile/
 1. **Push to GitHub**
    ```bash
    cd D:\App\unifia\pocket-tts-mobile
-   git remote add origin git@github.com:unifia/pocket-tts-mobile.git
+   git remote add origin git@github.com:Rwanbt/pocket-tts-mobile.git
    git push -u origin master
    ```
 
@@ -157,7 +157,7 @@ All documentation is stored in the Obsidian vault:
    - Allow A/B testing between C++ and Rust engines
    - Simplify integration
 
-3. **Separate repo**: Created `unifia/pocket-tts-mobile` instead of modifying Unifia directly to:
+3. **Separate repo**: Created `Rwanbt/pocket-tts-mobile` instead of modifying Unifia directly to:
    - Keep the main repo clean
    - Allow upstream contributions to Kyutai
    - Simplify maintenance
