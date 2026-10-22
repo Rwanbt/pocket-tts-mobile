@@ -96,18 +96,20 @@ fn the_stock_engine_never_reaches_the_french_eight_frames() {
     }
 }
 
-/// Le pont produit les huit frames francaises quand l'appelant ne tranche pas.
+/// Le pont sait produire les huit frames de l'époque 3.1.0.
 ///
-/// `-1` est ce que l'appelant envoie pour les packs qui n'imposent rien ; le
-/// francais 24 couches impose 8 par sa config.
+/// C'est la valeur que le pack FR d'Unifia applique encore aujourd'hui
+/// (`text_options_for("fr")` : `eos_extra_frames: 8`). Les configs actuelles
+/// de Kyutai ne la recommandent plus, mais l'appelant peut toujours la
+/// demander, et le pont l'applique : c'est tout l'objet de
+/// `ptt_set_text_options`.
 #[test]
-fn the_bridge_produces_the_french_eight_frames() {
-    let config = french_24l();
-    let recommended = config.model_recommended_frames_after_eos;
-    let (_, guess) = ptts::tts_model::prepare_text_prompt("Bonjour le monde.");
-    assert_eq!(frames_after_eos(-1, recommended, guess), 8);
-    // Et quand l'appelant impose la valeur, elle est respectee.
-    assert_eq!(frames_after_eos(8, recommended, guess), 8);
+fn the_bridge_can_produce_the_eight_frames_of_the_3_1_0_configs() {
+    // L'appelant les demande explicitement.
+    assert_eq!(frames_after_eos(8, None, 3), 8);
+    assert_eq!(frames_after_eos(8, Some(8), 1), 8);
+    // Et la recommandation d'une config 3.1.0 donnerait le meme resultat.
+    assert_eq!(frames_after_eos(-1, Some(8), 3), 8);
 }
 
 /// Le pont ne dégrade jamais la valeur demandée par l'appelant.

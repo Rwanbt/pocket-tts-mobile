@@ -50,29 +50,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Download the French checkpoint
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os
-          from huggingface_hub import hf_hub_download
-          repo = os.environ["HF_REPO"]
-          rev = os.environ["HF_REV"]
-          pack = os.environ.get("PACK", "pack")
-          os.makedirs(pack, exist_ok=True)
-          files = [
-              ("languages/french_24l/model.safetensors", "model.safetensors"),
-              ("languages/french_24l/tokenizer.json", "tokenizer.json"),
-              ("languages/french_24l/embeddings/estelle.safetensors", "embeddings/estelle.safetensors"),
-          ]
-          for src, dst in files:
-              out = os.path.join(pack, dst)
-              os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-              path = hf_hub_download(repo, src, revision=rev)
-              os.replace(path, out)
-              print("ok", dst, os.path.getsize(out))
-          PY'
-        env:
-          PACK: pack
+        run: python scripts/download_pack.py --config "${{ inputs.config }}" --out pack
 
       - name: Prepare the weights for ptts
         # Kyutai expose flow_lm.bos_before_voice, que ptts attend sous un autre
