@@ -19,13 +19,11 @@
 
 #![allow(clippy::needless_doctest_main)]
 
-pub mod config;
+// Module FFI (ABI C)
 pub mod ffi;
-pub mod model;
-pub mod rng;
-pub mod text;
-pub mod tokenizer;
-pub mod weights;
+
+// Module local pour l'intégration
+pub mod engine;
 
 // Réexporter les types publics pour l'ABI
 pub use ffi::{

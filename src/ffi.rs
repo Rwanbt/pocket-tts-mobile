@@ -1,51 +1,38 @@
 //! FFI (Foreign Function Interface) pour Pocket TTS Mobile
 //!
 //! Ce module expose une **ABI C compatible** avec l'actuel `libpocket_tts.so` (C++)
-//! utilisé par Unifia. Cela permet de remplacer le moteur C++/ONNX par ce runtime Rust
-//! sans modifier le code appelant (Tauri/Unifia).
+//! utilisé par Unifia.
+//!
+//! # Statut
+//!
+//! **Phase 0 - Work in Progress**
+//!
+//! Les fonctions sont implémentées comme des stubs pour permettre la compilation.
+//! L'implémentation complète sera ajoutée dans les phases suivantes.
 //!
 //! # ABI Exposée
 //!
-//! | Fonction | Description |
-//! |----------|-------------|
-//! | `ptt_create` | Initialise une nouvelle session TTS avec un pack modèle. |
-//! | `ptt_free` | Libère une session TTS. |
-//! | `ptt_stream_start` | Démarre la génération audio (streaming). |
-//! | `ptt_stream_read` | Lit un chunk audio (f32, 24 kHz mono). |
-//! | `ptt_stream_end` | Termine la génération et libère les ressources. |
-//! | `ptt_free_audio` | Libère un buffer audio alloué par `ptt_stream_read`. |
-//!
-//! # Threading
-//!
-//! - `ptt_stream_start` lance un **thread dédié** pour la génération.
-//! - `ptt_stream_read` est **bloquant** si aucun chunk n'est disponible (avec timeout).
-//! - `ptt_stream_end` envoie un signal d'arrêt au thread et joint.
-//!
-//! # Sécurité
-//!
-//! - Tous les pointeurs retournés sont **valides** jusqu'à l'appel suivant sur la même session.
-//! - Les buffers audio sont **alloués par Rust** et doivent être libérés avec `ptt_free_audio`.
-//! - Les erreurs sont **remontées** via des codes de retour (NULL ou taille 0).
+//! | Fonction | Description | Statut |
+//! |----------|-------------|--------|
+//! | `ptt_create` | Initialise une nouvelle session TTS | ✅ Stub |
+//! | `ptt_free` | Libère une session TTS | ✅ Implémenté |
+//! | `ptt_stream_start` | Démarre la génération audio | ✅ Stub |
+//! | `ptt_stream_read` | Lit un chunk audio | ✅ Stub |
+//! | `ptt_stream_end` | Termine la génération | ✅ Stub |
+//! | `ptt_free_audio` | Libère un buffer audio | ✅ Implémenté |
 
-use std::ffi::CString;
+use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
-use anyhow::Result;
-use tracing::{debug, error, info, warn};
+use tracing::error;
 
-use crate::model::TtsEngine;
+use crate::engine::TtsEngine;
 
 /// Opaque handle pour une session TTS (compatible avec l'ABI C++ existante)
 pub struct PttHandle {
     engine: Arc<Mutex<TtsEngine>>,
-}
-
-/// Contexte de streaming pour une session TTS
-pub struct StreamContext {
-    handle: *mut PttHandle,
-    // Autres champs pour gérer le streaming
 }
 
 // ============================================================================
@@ -55,13 +42,13 @@ pub struct StreamContext {
 /// Initialise une nouvelle session TTS avec un pack modèle.
 ///
 /// # Arguments
-/// - `pack_path` : Chemin vers le dossier du pack (ex: `/sdcard/.../voice-models/pocket/fr-24l-q8`)
+/// - `pack_path` : Chemin vers le dossier du pack
 ///
 /// # Retour
 /// - Pointeur vers une nouvelle session TTS, ou NULL en cas d'erreur.
 ///
-/// # Sécurité
-/// - Le pointeur doit être libéré avec `ptt_free`.
+/// # Statut
+/// - Stub: retourne toujours NULL pour l'instant
 #[no_mangle]
 pub extern "C" fn ptt_create(pack_path: *const c_char) -> *mut PttHandle {
     if pack_path.is_null() {
@@ -69,16 +56,15 @@ pub extern "C" fn ptt_create(pack_path: *const c_char) -> *mut PttHandle {
         return ptr::null_mut();
     }
 
-    let pack_path_str = unsafe { CString::from_raw(pack_path) };
-    let pack_path = pack_path_str.to_str().unwrap_or_default();
+    // Convertir le C string en Rust string
+    let pack_path_cstr = unsafe { CStr::from_ptr(pack_path) };
+    let pack_path = pack_path_cstr.to_str().unwrap_or_default();
 
     match TtsEngine::new(pack_path) {
         Ok(engine) => {
             let handle = Box::new(PttHandle {
                 engine: Arc::new(Mutex::new(engine)),
             });
-            // Ne pas libérer pack_path_str (le caller doit le faire)
-            std::mem::forget(pack_path_str);
             Box::into_raw(handle)
         }
         Err(e) => {
@@ -91,11 +77,10 @@ pub extern "C" fn ptt_create(pack_path: *const c_char) -> *mut PttHandle {
 /// Libère une session TTS.
 ///
 /// # Arguments
-/// - `handle` : Pointeur vers une session TTS (retourné par `ptt_create`)
+/// - `handle` : Pointeur vers une session TTS
 #[no_mangle]
 pub extern "C" fn ptt_free(handle: *mut PttHandle) {
     if handle.is_null() {
-        warn!("ptt_free: handle is NULL");
         return;
     }
     unsafe {
@@ -108,11 +93,14 @@ pub extern "C" fn ptt_free(handle: *mut PttHandle) {
 /// # Arguments
 /// - `handle` : Pointeur vers une session TTS
 /// - `text` : Texte à synthétiser (UTF-8)
-/// - `temperature` : Température pour la génération (0.0 = déterministe, >0.0 = aléatoire)
-/// - `voice_id` : ID de la voix (0 = voix par défaut)
+/// - `temperature` : Température pour la génération
+/// - `voice_id` : ID de la voix
 ///
 /// # Retour
 /// - 0 en cas de succès, -1 en cas d'erreur
+///
+/// # Statut
+/// - Stub: retourne toujours 0 pour l'instant
 #[no_mangle]
 pub extern "C" fn ptt_stream_start(
     handle: *mut PttHandle,
@@ -129,21 +117,17 @@ pub extern "C" fn ptt_stream_start(
         return -1;
     }
 
-    let text_str = unsafe { CString::from_raw(text) };
-    let text = text_str.to_str().unwrap_or_default();
+    // Convertir le C string en Rust string
+    let text_cstr = unsafe { CStr::from_ptr(text) };
+    let text = text_cstr.to_str().unwrap_or_default();
 
     let engine = unsafe { &*handle };
     let mut engine_guard = engine.engine.lock().unwrap();
 
     match engine_guard.start_stream(text, temperature, voice_id) {
-        Ok(_) => {
-            // Ne pas libérer text_str (le caller doit le faire)
-            std::mem::forget(text_str);
-            0
-        }
+        Ok(_) => 0,
         Err(e) => {
             error!("ptt_stream_start failed: {}", e);
-            std::mem::forget(text_str);
             -1
         }
     }
@@ -159,9 +143,8 @@ pub extern "C" fn ptt_stream_start(
 /// # Retour
 /// - Nombre de samples lus, ou 0 si fin de stream, ou -1 en cas d'erreur
 ///
-/// # Sécurité
-/// - Le buffer est **rempli par Rust** et doit être libéré avec `ptt_free_audio` si alloué.
-/// - En mode streaming, ce buffer est **toujours alloué par Rust** (même si `buffer` est fourni).
+/// # Statut
+/// - Stub: retourne toujours 0 pour l'instant
 #[no_mangle]
 pub extern "C" fn ptt_stream_read(
     handle: *mut PttHandle,
@@ -174,6 +157,10 @@ pub extern "C" fn ptt_stream_read(
     }
     if buffer.is_null() {
         error!("ptt_stream_read: buffer is NULL");
+        return -1;
+    }
+    if buffer_size == 0 {
+        error!("ptt_stream_read: buffer_size is 0");
         return -1;
     }
 
@@ -196,6 +183,9 @@ pub extern "C" fn ptt_stream_read(
 ///
 /// # Retour
 /// - 0 en cas de succès, -1 en cas d'erreur
+///
+/// # Statut
+/// - Stub: retourne toujours 0 pour l'instant
 #[no_mangle]
 pub extern "C" fn ptt_stream_end(handle: *mut PttHandle) -> i32 {
     if handle.is_null() {
@@ -219,15 +209,13 @@ pub extern "C" fn ptt_stream_end(handle: *mut PttHandle) -> i32 {
 ///
 /// # Arguments
 /// - `buffer` : Pointeur vers le buffer à libérer
+///
+/// # Note
+/// Dans cette implémentation, le buffer est fourni par l'appelant,
+/// donc cette fonction ne fait rien.
 #[no_mangle]
-pub extern "C" fn ptt_free_audio(buffer: *mut f32) {
-    if buffer.is_null() {
-        warn!("ptt_free_audio: buffer is NULL");
-        return;
-    }
-    unsafe {
-        let _ = Vec::from_raw_parts(buffer, 0, 0);
-    }
+pub extern "C" fn ptt_free_audio(_buffer: *mut f32) {
+    // No-op: le buffer est fourni par l'appelant
 }
 
 // ============================================================================
