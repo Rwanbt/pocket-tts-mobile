@@ -16,6 +16,7 @@ Les fichiers sont places dans le dossier de pack avec les noms que
 
 import argparse
 import os
+import shutil
 import sys
 
 REPO = "kyutai/pocket-tts-without-voice-cloning"
@@ -56,9 +57,10 @@ def main() -> int:
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         print(f"telechargement {src}", flush=True)
         path = hf_hub_download(args.repo, src, revision=args.rev)
-        # On deplace le fichier plutot que de le copier : le cache de
-        # huggingface_hub garde sa version propre, le pack garde la sienne.
-        os.replace(path, out)
+        # huggingface_hub renvoie un lien symbolique vers le blob du cache. Le
+        # deplacer ne laisserait dans le pack qu'un lien mort : le fichier
+        # lui-meme doit etre copie.
+        shutil.copyfile(os.path.realpath(path), out)
         print(f"  ok {dst} ({os.path.getsize(out)} octets)", flush=True)
     print("DONE")
     return 0

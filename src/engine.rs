@@ -204,6 +204,9 @@ impl Stream {
     /// `None` signale la fin du stream (ou une annulation). Après [`Stream::stop`],
     /// la lecture est terminée : plus aucun chunk n'est rendu, même si le
     /// producteur en avait mis en attente.
+    // Le nom `next` est celui d'un iterateur, mais le stream n'en est pas un :
+    // il rend des chunks audio, pas des elements de collection.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Vec<f32>> {
         if self.stop.load(Ordering::Relaxed) {
             return None;

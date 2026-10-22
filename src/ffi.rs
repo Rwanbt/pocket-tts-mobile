@@ -122,6 +122,9 @@ pub unsafe extern "C" fn ptt_destroy(engine: *mut c_void) {
 }
 
 /// Préchauffe le moteur et renvoie la durée en ms.
+///
+/// # Safety
+/// `engine` doit venir de `ptt_create` et être vivant.
 #[no_mangle]
 pub unsafe extern "C" fn ptt_warmup(engine: *mut c_void) -> f64 {
     if engine.is_null() {
