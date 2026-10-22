@@ -44,13 +44,6 @@ path-clean = "1.0"
 default = []
 # Feature pour le build Android
 android = []
-# Feature pour le binaire de test
-test-bin = ["clap"]
-
-[dependencies.clap]
-version = "4.0"
-features = ["derive"]
-optional = true
 
 [dev-dependencies]
 # Pour les tests unitaires
@@ -70,7 +63,3 @@ inherits = "release"
 codegen-units = 1
 panic = "abort"
 
-[[bin]]
-name = "pocket-tts-mobile-test"
-path = "src/main.rs"
-required-features = ["test-bin"]

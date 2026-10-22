@@ -112,36 +112,40 @@ fn shared_library() -> PathBuf {
 /// un code d'échec, jamais un crash.
 #[test]
 fn null_arguments_are_refused_everywhere() {
-    assert!(ptt_create(
-        std::ptr::null(),
-        std::ptr::null(),
-        std::ptr::null(),
-        std::ptr::null(),
-        0.5,
-        1,
-        2
-    )
-    .is_null());
-    assert_eq!(ptt_warmup(std::ptr::null_mut()), 0.0);
-    assert_eq!(
-        ptt_set_text_options(std::ptr::null_mut(), 8, 0, 1, 50),
-        1,
-        "des options invalides sur un moteur nul doivent être refusées"
-    );
-    assert!(ptt_stream_start(std::ptr::null_mut(), std::ptr::null(), std::ptr::null()).is_null());
-    assert_eq!(
-        ptt_stream_read(
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut()
-        ),
-        0
-    );
-    // Ces trois fonctions acceptent NULL sans effet : elles nettoient un
-    // pointeur qui peut légitimement être nul.
-    ptt_destroy(std::ptr::null_mut());
-    ptt_stream_end(std::ptr::null_mut());
-    ptt_free_audio(std::ptr::null_mut());
+    // SAFETY: les pointeurs sont volontairement invalides ; la fonction doit
+    // les refuser sans les déréférencer.
+    unsafe {
+        assert!(ptt_create(
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0.5,
+            1,
+            2
+        )
+        .is_null());
+        assert_eq!(ptt_warmup(std::ptr::null_mut()), 0.0);
+        assert_eq!(
+            ptt_set_text_options(std::ptr::null_mut(), 8, 0, 1, 50),
+            1,
+            "des options invalides sur un moteur nul doivent être refusées"
+        );
+        assert!(ptt_stream_start(std::ptr::null_mut(), std::ptr::null(), std::ptr::null()).is_null());
+        assert_eq!(
+            ptt_stream_read(
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut()
+            ),
+            0
+        );
+        // Ces trois fonctions acceptent NULL sans effet : elles nettoient un
+        // pointeur qui peut légitimement être nul.
+        ptt_destroy(std::ptr::null_mut());
+        ptt_stream_end(std::ptr::null_mut());
+        ptt_free_audio(std::ptr::null_mut());
+    }
 }
 
 /// Un moteur ne peut pas être créé depuis un pack inexistant.
