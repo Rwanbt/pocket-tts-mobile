@@ -29,6 +29,7 @@ fn main() -> Result<()> {
     let mut temperature = 0.3f32;
     let mut seed: u64 = 4242424242424242;
     let mut quant = Quant::F32;
+    let mut register_voices = false;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -43,6 +44,7 @@ fn main() -> Result<()> {
             "--lang" => lang = Some(value()?),
             "--temperature" => temperature = value()?.parse().context("bad --temperature")?,
             "--seed" => seed = value()?.parse().context("bad --seed")?,
+            "--register-voices" => register_voices = true,
             "--quant" => {
                 quant = match value()?.as_str() {
                     "f32" => Quant::F32,
@@ -84,6 +86,18 @@ fn main() -> Result<()> {
         .temperature(temperature)
         .seed(seed);
     let mut synth: Synth = builder.build().context("cannot build the synth")?;
+    if register_voices {
+        // Comme `ptts-ffi` : les voix du pack (dossier `voices/` ou `embeddings/`)
+        // sont enregistrees apres le chargement. `Checkpoint::register_voices`
+        // avale l'echec dans un `tracing::warn!` ; on appelle donc
+        // `add_voice_file` directement pour voir l'erreur.
+        for (name, path) in &checkpoint.voices {
+            match synth.add_voice_file(name, path) {
+                Ok(()) => println!("voice {name:?} registered"),
+                Err(e) => println!("voice {name:?} REJECTED: {e}"),
+            }
+        }
+    }
     let load_ms = load_start.elapsed().as_secs_f64() * 1e3;
     println!(
         "loaded in {load_ms:.0} ms: device={} sample_rate={} voices={:?} languages={:?}",
