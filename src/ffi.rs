@@ -18,7 +18,7 @@
 //! | `ptt_stream_end` | Arrête le stream, libère le contexte. |
 //! | `ptt_free_audio` | Libère un tampon de `ptt_stream_read`. |
 //!
-//! # Sécurité
+//! # Safety
 //!
 //! - L'ABI C++ d'origine n'a pas de canal d'erreur : un échec se manifeste par
 //!   un pointeur nul ou un retour ≠ 1. Chaque échec est donc **logué** côté
@@ -47,7 +47,7 @@ pub struct Ctx {
 
 /// Traduit une chaîne C en `&str`.
 ///
-/// # Sécurité
+/// # Safety
 /// `ptr` doit pointer vers une chaîne C terminée par NUL, valide pendant l'appel.
 unsafe fn cstr<'a>(ptr: *const c_char) -> Option<&'a str> {
     if ptr.is_null() {
@@ -60,7 +60,7 @@ unsafe fn cstr<'a>(ptr: *const c_char) -> Option<&'a str> {
 ///
 /// Renvoie `NULL` en cas d'échec ; l'erreur est loguée.
 ///
-/// # Sécurité
+/// # Safety
 /// Les pointeurs doivent être des chaînes C vivantes pendant l'appel.
 #[no_mangle]
 pub unsafe extern "C" fn ptt_create(
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn ptt_create(
 
 /// Libère un moteur.
 ///
-/// # Sécurité
+/// # Safety
 /// `engine` doit venir de `ptt_create` et n'être libéré qu'une fois, après
 /// la fin de tous ses streams.
 #[no_mangle]
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn ptt_stream_end(stream: *mut c_void) {
 
 /// Libère un tampon renvoyé par `ptt_stream_read`.
 ///
-/// # Sécurité
+/// # Safety
 /// `samples` doit provenir de `ptt_stream_read` et n'avoir pas déjà été libéré.
 #[no_mangle]
 pub unsafe extern "C" fn ptt_free_audio(samples: *mut f32) {
@@ -312,7 +312,7 @@ fn alloc_audio(samples: &[f32]) -> *mut f32 {
 
 /// Libère un tampon produit par [`alloc_audio`].
 ///
-/// # Sécurité
+/// # Safety
 /// `ptr` doit provenir de `alloc_audio` et n'avoir pas déjà été libéré.
 unsafe fn free_audio(ptr: *mut f32) {
     let base = (ptr as *mut u32).sub(1);
