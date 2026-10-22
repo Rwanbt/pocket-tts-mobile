@@ -67,12 +67,10 @@ fn main() -> Result<()> {
     names.sort();
 
     let mut qtensors: Vec<(String, QTensor)> = Vec::with_capacity(names.len());
-    let mut quantized_bytes = 0usize;
     for name in names {
         let tensor = &tensors[name];
         let qtensor = if should_quantize(name) {
             let data = tensor_to_f32(tensor)?;
-            quantized_bytes += data.len() * 4;
             QTensor::quantize_f32(&data, tensor.shape(), quant)?
         } else {
             as_is_qtensor(tensor)?

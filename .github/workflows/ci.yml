@@ -34,6 +34,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Build the shared library
+        # La bibliotheque partagee est un artefact a part : `cargo test` ne la
+        # construit pas. Elle est donc construite d'abord, pour que le test
+        # qui verifie les symboles exportes ait de quoi travailler.
+        run: cargo build --lib
+
       - name: tests
         run: cargo test
 
