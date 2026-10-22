@@ -5,10 +5,10 @@
 use crate::kyutai::config::{Config, FlowType, Origin};
 use crate::kyutai::defaults;
 use crate::kyutai::rng::NoiseRng;
-use crate::kyutai::text::{TextOptions, prepare_text_prompt, split_into_best_sentences};
+use crate::kyutai::text::{prepare_text_prompt, split_into_best_sentences, TextOptions};
 use crate::kyutai::tokenizer::{SharedTokenizer, Tokenizer};
 use crate::kyutai::weights::{SafetensorsFile, WeightFiles};
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use ptts::flow_lm::{FlowLMState, StepInput};
 use ptts::transformer::{LayerAttentionState, StreamingMHAState, StreamingTransformerState};
 use ptts::tts_model::{MimiEnc, TTSModel, TTSState};
@@ -165,7 +165,9 @@ impl<Q: CpuBackend> TtsModel<Q> {
                 bail!("flow_lm.weights_path needs mimi.weights_path, for the Mimi weights")
             }
             log::info!("Loading FlowLM weights from {flow_lm_path}");
-            weight_files.flow_lm = Some(crate::kyutai::download::download_if_necessary(flow_lm_path)?);
+            weight_files.flow_lm = Some(crate::kyutai::download::download_if_necessary(
+                flow_lm_path,
+            )?);
         } else {
             bail!("No weights_path specified for the TTSModel, the model would be uninitialized")
         }
@@ -221,6 +223,21 @@ impl<Q: CpuBackend> TtsModel<Q> {
             tokenizer,
             has_voice_cloning,
         })
+    }
+
+    /// Les options du front-end texte que le modele applique.
+    ///
+    /// Expose pour que l'appelant puisse les remplacer : l'ABI
+    /// `ptt_set_text_options` porte des choix que la config ne couvre pas
+    /// toujours, et sans cela le francais perdrait le traitement des
+    /// points-virgules.
+    pub fn text_options(&self) -> &TextOptions {
+        &self.text_options
+    }
+
+    /// Remplace les options du front-end texte.
+    pub fn set_text_options(&mut self, options: TextOptions) {
+        self.text_options = options;
     }
 
     pub fn sample_rate(&self) -> usize {
