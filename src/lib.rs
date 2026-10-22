@@ -22,12 +22,16 @@
 // Module FFI (ABI C)
 pub mod ffi;
 
-// Module local pour l'intégration
+// Backend de synthèse (moteur d'inférence)
+pub mod backend;
+
+// Moteur, options du front-end texte et streaming
 pub mod engine;
 
 // Réexporter les types publics pour l'ABI
 pub use ffi::{
-    ptt_create, ptt_free, ptt_free_audio, ptt_stream_end, ptt_stream_read, ptt_stream_start,
+    ptt_create, ptt_destroy, ptt_free_audio, ptt_set_text_options, ptt_stream_end,
+    ptt_stream_read, ptt_stream_start, ptt_warmup,
 };
 
 /// Version du crate (pour compatibilité ABI)

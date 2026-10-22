@@ -1,225 +1,322 @@
-//! FFI (Foreign Function Interface) pour Pocket TTS Mobile
+//! FFI (Foreign Function Interface) — Pocket TTS Mobile.
 //!
-//! Ce module expose une **ABI C compatible** avec l'actuel `libpocket_tts.so` (C++)
-//! utilisé par Unifia.
+//! Implémente l'ABI C `ptt_*` **exactement** telle que l'appelle
+//! `packages/mobile/src-tauri/src/voice/pocket_tts.rs` dans Unifia.
+//! Le contrat complet est dans `docs/ABI-CONTRACT.md` ; toute divergence ici
+//! casse l'interopérabilité (la lib C++ d'origine n'est plus utilisée).
 //!
-//! # Statut
+//! # Symboles exposés
 //!
-//! **Phase 0 - Work in Progress**
+//! | Symbole | Rôle |
+//! |---------|------|
+//! | `ptt_create` | Crée un moteur depuis un pack. NULL en cas d'échec. |
+//! | `ptt_destroy` | Libère le moteur. Exactement une fois. |
+//! | `ptt_warmup` | Préchauffe le moteur, renvoie la durée en ms. |
+//! | `ptt_set_text_options` | Applique le front-end texte. 0 = accepté. |
+//! | `ptt_stream_start` | Démarre une synthèse, renvoie un contexte. |
+//! | `ptt_stream_read` | Lecture bloquante, **alloue** le tampon. 1 = chunk. |
+//! | `ptt_stream_end` | Arrête le stream, libère le contexte. |
+//! | `ptt_free_audio` | Libère un tampon de `ptt_stream_read`. |
 //!
-//! Les fonctions sont implémentées comme des stubs pour permettre la compilation.
-//! L'implémentation complète sera ajoutée dans les phases suivantes.
+//! # Sécurité
 //!
-//! # ABI Exposée
-//!
-//! | Fonction | Description | Statut |
-//! |----------|-------------|--------|
-//! | `ptt_create` | Initialise une nouvelle session TTS | ✅ Stub |
-//! | `ptt_free` | Libère une session TTS | ✅ Implémenté |
-//! | `ptt_stream_start` | Démarre la génération audio | ✅ Stub |
-//! | `ptt_stream_read` | Lit un chunk audio | ✅ Stub |
-//! | `ptt_stream_end` | Termine la génération | ✅ Stub |
-//! | `ptt_free_audio` | Libère un buffer audio | ✅ Implémenté |
+//! - L'ABI C++ d'origine n'a pas de canal d'erreur : un échec se manifeste par
+//!   un pointeur nul ou un retour ≠ 1. Chaque échec est donc **logué** côté
+//!   natif, sinon il est invisible (la console du WebView ne rejoint pas logcat).
+//! - `ptt_stream_read` renvoie un tampon alloué par Rust : l'appelant doit le
+//!   libérer avec `ptt_free_audio`, et lui seul.
 
 use std::ffi::CStr;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
-use tracing::error;
+use tracing::{error, info};
 
-use crate::engine::TtsEngine;
+use crate::engine::{Engine, Stream};
 
-/// Opaque handle pour une session TTS (compatible avec l'ABI C++ existante)
-pub struct PttHandle {
-    engine: Arc<Mutex<TtsEngine>>,
+/// Moteur TTS vu par l'ABI C.
+pub struct Handle {
+    engine: Mutex<Engine>,
 }
 
-// ============================================================================
-// Fonctions C exposées (ABI)
-// ============================================================================
+/// Contexte de stream vu par l'ABI C.
+pub struct Ctx {
+    stream: Stream,
+}
 
-/// Initialise une nouvelle session TTS avec un pack modèle.
+/// Traduit une chaîne C en `&str`.
 ///
-/// # Arguments
-/// - `pack_path` : Chemin vers le dossier du pack
-///
-/// # Retour
-/// - Pointeur vers une nouvelle session TTS, ou NULL en cas d'erreur.
-///
-/// # Statut
-/// - Stub: retourne toujours NULL pour l'instant
-#[no_mangle]
-pub extern "C" fn ptt_create(pack_path: *const c_char) -> *mut PttHandle {
-    if pack_path.is_null() {
-        error!("ptt_create: pack_path is NULL");
-        return ptr::null_mut();
+/// # Sécurité
+/// `ptr` doit pointer vers une chaîne C terminée par NUL, valide pendant l'appel.
+unsafe fn cstr<'a>(ptr: *const c_char) -> Option<&'a str> {
+    if ptr.is_null() {
+        return None;
     }
+    CStr::from_ptr(ptr).to_str().ok()
+}
 
-    // Convertir le C string en Rust string
-    let pack_path_cstr = unsafe { CStr::from_ptr(pack_path) };
-    let pack_path = pack_path_cstr.to_str().unwrap_or_default();
+/// Crée un moteur à partir d'un pack.
+///
+/// Renvoie `NULL` en cas d'échec ; l'erreur est loguée.
+///
+/// # Sécurité
+/// Les pointeurs doivent être des chaînes C vivantes pendant l'appel.
+#[no_mangle]
+pub extern "C" fn ptt_create(
+    models_dir: *const c_char,
+    voices_dir: *const c_char,
+    tokenizer: *const c_char,
+    precision: *const c_char,
+    temperature: f32,
+    lsd_steps: c_int,
+    num_threads: c_int,
+) -> *mut c_void {
+    let (Some(models), Some(voices), Some(tok)) = (unsafe {
+        (
+            cstr(models_dir),
+            cstr(voices_dir),
+            cstr(tokenizer),
+        )
+    }) else {
+        error!("ptt_create: NULL path argument");
+        return ptr::null_mut();
+    };
+    let prec = unsafe { cstr(precision) }.unwrap_or("f32");
 
-    match TtsEngine::new(pack_path) {
+    match Engine::load(models, voices, tok, prec, temperature, lsd_steps, num_threads) {
         Ok(engine) => {
-            let handle = Box::new(PttHandle {
-                engine: Arc::new(Mutex::new(engine)),
-            });
-            Box::into_raw(handle)
+            info!(
+                "[voice] Pocket Rust engine loaded: models={models} voices={voices} \
+                 tokenizer={tok} precision={prec} temperature={temperature} \
+                 lsd_steps={lsd_steps} num_threads={num_threads}"
+            );
+            Box::into_raw(Box::new(Handle {
+                engine: Mutex::new(engine),
+            })) as *mut c_void
         }
-        Err(e) => {
-            error!("ptt_create failed: {}", e);
+        Err(err) => {
+            error!("ptt_create failed: {err}");
             ptr::null_mut()
         }
     }
 }
 
-/// Libère une session TTS.
+/// Libère un moteur.
 ///
-/// # Arguments
-/// - `handle` : Pointeur vers une session TTS
+/// # Sécurité
+/// `engine` doit venir de `ptt_create` et n'être libéré qu'une fois, après
+/// la fin de tous ses streams.
 #[no_mangle]
-pub extern "C" fn ptt_free(handle: *mut PttHandle) {
-    if handle.is_null() {
+pub extern "C" fn ptt_destroy(engine: *mut c_void) {
+    if engine.is_null() {
         return;
     }
     unsafe {
-        let _ = Box::from_raw(handle);
+        drop(Box::from_raw(engine as *mut Handle));
     }
 }
 
-/// Démarre la génération audio pour un texte donné.
+/// Préchauffe le moteur et renvoie la durée en ms.
+#[no_mangle]
+pub extern "C" fn ptt_warmup(engine: *mut c_void) -> f64 {
+    if engine.is_null() {
+        return 0.0;
+    }
+    let handle = unsafe { &*(engine as *const Handle) };
+    let mut guard = match handle.engine.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("ptt_warmup: engine poisoned: {err}");
+            return 0.0;
+        }
+    };
+    match guard.warmup() {
+        Ok(ms) => ms,
+        Err(err) => {
+            error!("ptt_warmup failed: {err}");
+            0.0
+        }
+    }
+}
+
+/// Applique les options du front-end texte.
 ///
-/// # Arguments
-/// - `handle` : Pointeur vers une session TTS
-/// - `text` : Texte à synthétiser (UTF-8)
-/// - `temperature` : Température pour la génération
-/// - `voice_id` : ID de la voix
+/// Renvoie 0 si les options sont acceptées, non-zéro sinon. Dans ce dernier
+/// cas l'appelant détruit le moteur.
 ///
-/// # Retour
-/// - 0 en cas de succès, -1 en cas d'erreur
+/// # Safety
+/// `engine` doit venir de `ptt_create`.
+#[no_mangle]
+pub extern "C" fn ptt_set_text_options(
+    engine: *mut c_void,
+    eos_extra_frames: c_int,
+    pad_short_inputs: c_int,
+    remove_semicolons: c_int,
+    max_chunk_tokens: c_int,
+) -> c_int {
+    if engine.is_null() {
+        return 1;
+    }
+    let handle = unsafe { &*(engine as *const Handle) };
+    let mut guard = match handle.engine.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("ptt_set_text_options: engine poisoned: {err}");
+            return 1;
+        }
+    };
+    match guard.set_text_options(
+        eos_extra_frames,
+        pad_short_inputs != 0,
+        remove_semicolons != 0,
+        max_chunk_tokens,
+    ) {
+        Ok(()) => 0,
+        Err(err) => {
+            error!("ptt_set_text_options rejected: {err}");
+            1
+        }
+    }
+}
+
+/// Démarre une synthèse et renvoie un contexte de stream.
 ///
-/// # Statut
-/// - Stub: retourne toujours 0 pour l'instant
+/// Renvoie `NULL` en cas d'échec.
+///
+/// # Safety
+/// `engine` doit venir de `ptt_create` ; `text` et `voice` doivent être des
+/// chaînes C vivantes pendant l'appel.
 #[no_mangle]
 pub extern "C" fn ptt_stream_start(
-    handle: *mut PttHandle,
+    engine: *mut c_void,
     text: *const c_char,
-    temperature: f32,
-    voice_id: i32,
-) -> i32 {
-    if handle.is_null() {
-        error!("ptt_stream_start: handle is NULL");
-        return -1;
+    voice: *const c_char,
+) -> *mut c_void {
+    if engine.is_null() {
+        error!("ptt_stream_start: NULL engine");
+        return ptr::null_mut();
     }
-    if text.is_null() {
-        error!("ptt_stream_start: text is NULL");
-        return -1;
-    }
-
-    // Convertir le C string en Rust string
-    let text_cstr = unsafe { CStr::from_ptr(text) };
-    let text = text_cstr.to_str().unwrap_or_default();
-
-    let engine = unsafe { &*handle };
-    let mut engine_guard = engine.engine.lock().unwrap();
-
-    match engine_guard.start_stream(text, temperature, voice_id) {
-        Ok(_) => 0,
-        Err(e) => {
-            error!("ptt_stream_start failed: {}", e);
-            -1
+    let (Some(txt), Some(voc)) = (unsafe { (cstr(text), cstr(voice)) }) else {
+        error!("ptt_stream_start: NULL text or voice");
+        return ptr::null_mut();
+    };
+    let handle = unsafe { &*(engine as *const Handle) };
+    let mut guard = match handle.engine.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("ptt_stream_start: engine poisoned: {err}");
+            return ptr::null_mut();
+        }
+    };
+    match guard.start(txt, voc) {
+        Ok(stream) => Box::into_raw(Box::new(Ctx { stream })) as *mut c_void,
+        Err(err) => {
+            error!("ptt_stream_start failed: {err}");
+            ptr::null_mut()
         }
     }
 }
 
-/// Lit un chunk audio depuis le stream.
+/// Lecture bloquante du prochain chunk.
 ///
-/// # Arguments
-/// - `handle` : Pointeur vers une session TTS
-/// - `buffer` : Buffer pour stocker les samples audio (f32, 24 kHz mono)
-/// - `buffer_size` : Taille du buffer (en nombre de samples)
+/// Renvoie 1 et alloue `*out_samples` (24 kHz mono f32) quand un chunk est
+/// disponible ; `*out_length` reçoit le nombre de samples. Toute autre valeur
+/// signale la fin du stream ou une erreur, et `*out_samples` reste nul.
 ///
-/// # Retour
-/// - Nombre de samples lus, ou 0 si fin de stream, ou -1 en cas d'erreur
+/// Le tampon appartient à l'appelant, qui doit le libérer avec `ptt_free_audio`.
 ///
-/// # Statut
-/// - Stub: retourne toujours 0 pour l'instant
+/// # Safety
+/// `stream` doit venir de `ptt_stream_start` et être vivant.
 #[no_mangle]
 pub extern "C" fn ptt_stream_read(
-    handle: *mut PttHandle,
-    buffer: *mut f32,
-    buffer_size: usize,
-) -> i32 {
-    if handle.is_null() {
-        error!("ptt_stream_read: handle is NULL");
-        return -1;
+    stream: *mut c_void,
+    out_samples: *mut *mut f32,
+    out_length: *mut c_int,
+) -> c_int {
+    if stream.is_null() || out_samples.is_null() || out_length.is_null() {
+        error!("ptt_stream_read: NULL argument");
+        return 0;
     }
-    if buffer.is_null() {
-        error!("ptt_stream_read: buffer is NULL");
-        return -1;
+    unsafe {
+        *out_samples = ptr::null_mut();
+        *out_length = 0;
     }
-    if buffer_size == 0 {
-        error!("ptt_stream_read: buffer_size is 0");
-        return -1;
-    }
-
-    let engine = unsafe { &*handle };
-    let mut engine_guard = engine.engine.lock().unwrap();
-
-    match engine_guard.read_stream(buffer, buffer_size) {
-        Ok(n) => n as i32,
-        Err(e) => {
-            error!("ptt_stream_read failed: {}", e);
-            -1
+    let ctx = unsafe { &mut *(stream as *mut Ctx) };
+    match ctx.stream.next() {
+        Some(samples) if !samples.is_empty() => {
+            let len = c_int::try_from(samples.len()).unwrap_or(c_int::MAX);
+            let ptr = alloc_audio(&samples);
+            unsafe {
+                *out_samples = ptr;
+                *out_length = len;
+            }
+            1
         }
+        Some(_) => 0,
+        None => 0,
     }
 }
 
-/// Termine la génération audio et libère les ressources du stream.
+/// Arrête un stream et libère son contexte.
 ///
-/// # Arguments
-/// - `handle` : Pointeur vers une session TTS
-///
-/// # Retour
-/// - 0 en cas de succès, -1 en cas d'erreur
-///
-/// # Statut
-/// - Stub: retourne toujours 0 pour l'instant
+/// # Safety
+/// `stream` doit venir de `ptt_stream_start` et ne pas avoir déjà été libéré.
 #[no_mangle]
-pub extern "C" fn ptt_stream_end(handle: *mut PttHandle) -> i32 {
-    if handle.is_null() {
-        error!("ptt_stream_end: handle is NULL");
-        return -1;
+pub extern "C" fn ptt_stream_end(stream: *mut c_void) {
+    if stream.is_null() {
+        return;
     }
-
-    let engine = unsafe { &*handle };
-    let mut engine_guard = engine.engine.lock().unwrap();
-
-    match engine_guard.end_stream() {
-        Ok(_) => 0,
-        Err(e) => {
-            error!("ptt_stream_end failed: {}", e);
-            -1
-        }
-    }
+    let mut ctx = unsafe { Box::from_raw(stream as *mut Ctx) };
+    ctx.stream.stop();
 }
 
-/// Libère un buffer audio alloué par `ptt_stream_read`.
+/// Libère un tampon renvoyé par `ptt_stream_read`.
 ///
-/// # Arguments
-/// - `buffer` : Pointeur vers le buffer à libérer
-///
-/// # Note
-/// Dans cette implémentation, le buffer est fourni par l'appelant,
-/// donc cette fonction ne fait rien.
+/// # Sécurité
+/// `samples` doit provenir de `ptt_stream_read` et n'avoir pas déjà été libéré.
 #[no_mangle]
-pub extern "C" fn ptt_free_audio(_buffer: *mut f32) {
-    // No-op: le buffer est fourni par l'appelant
+pub extern "C" fn ptt_free_audio(samples: *mut f32) {
+    if samples.is_null() {
+        return;
+    }
+    unsafe { free_audio(samples) };
+}
+
+/// Alloue un tampon f32 précédé d'un en-tête contenant sa longueur.
+///
+/// L'ABI C d'origine expose `ptt_free_audio(float*)` sans longueur : sans
+/// en-tête, la libération serait un double free ou une lecture hors bornes.
+/// L'en-tête tient en un `u32`, ce qui préserve l'alignement 4 octets des
+/// `f32`.
+fn alloc_audio(samples: &[f32]) -> *mut f32 {
+    let len = samples.len();
+    let mut words: Vec<u32> = vec![0; len + 1];
+    words[0] = len as u32;
+    for (slot, sample) in words[1..].iter_mut().zip(samples) {
+        *slot = sample.to_bits();
+    }
+    let base = words.as_mut_ptr();
+    std::mem::forget(words);
+    // SAFETY: `base` pointe sur len + 1 mots alloués, l'offset 1 garde
+    // l'alignement de 4 octets requis par f32.
+    unsafe { base.add(1) as *mut f32 }
+}
+
+/// Libère un tampon produit par [`alloc_audio`].
+///
+/// # Sécurité
+/// `ptr` doit provenir de `alloc_audio` et n'avoir pas déjà été libéré.
+unsafe fn free_audio(ptr: *mut f32) {
+    let base = (ptr as *mut u32).sub(1);
+    let len = *base as usize;
+    // La reconstruction doit retrouver exactement la longueur ET la capacité
+    // d'origine, sinon la libération est un comportement indéfini.
+    drop(Vec::from_raw_parts(base, len + 1, len + 1));
 }
 
 // ============================================================================
-// Tests unitaires
+// Tests
 // ============================================================================
 
 #[cfg(test)]
@@ -227,38 +324,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ptt_create_null() {
-        let handle = ptt_create(ptr::null());
-        assert!(handle.is_null());
+    fn null_arguments_are_rejected() {
+        assert!(ptt_create(ptr::null(), ptr::null(), ptr::null(), ptr::null(), 0.0, 0, 0).is_null());
+        assert!(ptt_stream_start(ptr::null_mut(), ptr::null(), ptr::null()).is_null());
+        assert_eq!(ptt_stream_read(ptr::null_mut(), ptr::null_mut(), ptr::null_mut()), 0);
+        assert_eq!(ptt_warmup(ptr::null_mut()), 0.0);
+        assert_eq!(ptt_set_text_options(ptr::null_mut(), 0, 0, 0, 0), 1);
     }
 
     #[test]
-    fn test_ptt_free_null() {
-        ptt_free(ptr::null_mut());
-        // Ne doit pas paniquer
-    }
-
-    #[test]
-    fn test_ptt_stream_start_null() {
-        let result = ptt_stream_start(ptr::null_mut(), ptr::null(), 0.0, 0);
-        assert_eq!(result, -1);
-    }
-
-    #[test]
-    fn test_ptt_stream_read_null() {
-        let result = ptt_stream_read(ptr::null_mut(), ptr::null_mut(), 0);
-        assert_eq!(result, -1);
-    }
-
-    #[test]
-    fn test_ptt_stream_end_null() {
-        let result = ptt_stream_end(ptr::null_mut());
-        assert_eq!(result, -1);
-    }
-
-    #[test]
-    fn test_ptt_free_audio_null() {
+    fn destroy_and_end_tolerate_null() {
+        ptt_destroy(ptr::null_mut());
+        ptt_stream_end(ptr::null_mut());
         ptt_free_audio(ptr::null_mut());
-        // Ne doit pas paniquer
+    }
+
+    #[test]
+    fn free_audio_accepts_a_null_pointer() {
+        ptt_free_audio(ptr::null_mut());
+    }
+
+    #[test]
+    fn audio_round_trips_through_the_allocator() {
+        // L'en-tête de longueur est la seule façon de libérer correctement un
+        // tampon dont l'ABI C ne transmet pas la taille.
+        let samples = vec![0.5f32, -0.25, 1.0, -1.0, 0.0];
+        let ptr = alloc_audio(&samples);
+        assert!(!ptr.is_null());
+        // SAFETY: `ptr` vient de `alloc_audio` et n'est pas encore libéré.
+        let len = unsafe { *(ptr as *const u32).sub(1) } as usize;
+        assert_eq!(len, samples.len());
+        // SAFETY: `ptr` porte `len` samples valides, alloués par `alloc_audio`.
+        let read = unsafe { std::slice::from_raw_parts(ptr, len) };
+        assert_eq!(read, &samples[..]);
+        // SAFETY: le tampon est libéré une seule fois.
+        unsafe { free_audio(ptr) };
     }
 }
