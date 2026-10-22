@@ -128,6 +128,7 @@ impl Kyutai {
         models_dir: &PathBuf,
         voices_dir: &PathBuf,
         weights: &PathBuf,
+        tokenizer: &PathBuf,
         temperature: f32,
         eos_threshold: Option<f32>,
     ) -> Result<Self> {
@@ -137,10 +138,13 @@ impl Kyutai {
             noise_clamp: None,
             eos_threshold,
         };
-        // Les poids viennent du pack, pas du depot Hugging Face.
+        // Les poids et le tokenizer viennent du pack, pas du depot Hugging
+        // Face : la config YAML porte des URLs `hf://`, qui doivent etre
+        // remplacees par des chemins locaux avant le chargement.
         let mut config = config;
         config.weights_path = Some(weights.to_string_lossy().to_string());
         config.weights_path_without_voice_cloning = None;
+        config.flow_lm.lookup_table.tokenizer_path = tokenizer.to_string_lossy().to_string();
         let _ = models_dir;
 
         let inner: Box<dyn Runner> = match precision_of(weights) {

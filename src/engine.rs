@@ -111,6 +111,7 @@ impl Engine {
             &PathBuf::from(models),
             &PathBuf::from(voices),
             &weights,
+            &PathBuf::from(tokenizer),
             temperature,
             None,
         )?;
