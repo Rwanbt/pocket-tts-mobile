@@ -62,7 +62,9 @@ jobs:
           mv pack/model.patched.safetensors pack/model.safetensors
 
       - name: Build the config
-        run: cargo run --release --bin make_config -- --config "${{ inputs.config }}" --out pack/config.json
+        # Le pack porte la config YAML : c'est elle qui contient les options
+        # du front-end texte, que le config.json de ptts ne porte pas.
+        run: cargo run --release --bin make_config -- --config "${{ inputs.config }}" --yaml pack/config.yaml --out pack/config.json
 
       - name: Render both paths
         run: |
