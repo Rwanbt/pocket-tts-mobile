@@ -8,27 +8,32 @@
 //! Usage :
 //!   cargo run --bin make_config -- --config french_24l --out D:/App/unifia/models/fr/config.json
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use pocket_tts_mobile::kyutai::config::Config;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let mut config_name = "french_24l".to_string();
     let mut out = PathBuf::from("config.json");
+    let mut yaml_out: Option<PathBuf> = None;
     let mut steps: usize = pocket_tts_mobile::kyutai::defaults::DEFAULT_SAMPLER_DECODE_STEPS;
     let mut eos_threshold: Option<f32> = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
-        let mut value = || -> Result<String> {
-            args.next().with_context(|| format!("{arg} needs a value"))
-        };
+        let mut value =
+            || -> Result<String> { args.next().with_context(|| format!("{arg} needs a value")) };
         match arg.as_str() {
             "--config" => config_name = value()?,
             "--out" => out = PathBuf::from(value()?),
+            "--yaml" => yaml_out = Some(PathBuf::from(value()?)),
             "--steps" => steps = value()?.parse().context("--steps must be a number")?,
             "--eos-threshold" => {
-                eos_threshold = Some(value()?.parse().context("--eos-threshold must be a number")?)
+                eos_threshold = Some(
+                    value()?
+                        .parse()
+                        .context("--eos-threshold must be a number")?,
+                )
             }
             "--list" => {
                 for name in pocket_tts_mobile::kyutai::available_configs() {
@@ -47,7 +52,15 @@ fn main() -> Result<()> {
         )
     })?;
 
-    let config = Config::parse(yaml).with_context(|| format!("invalid Kyutai config {config_name}"))?;
+    // Le pack mobile porte la config YAML : c'est elle qui contient les options
+    // du front-end texte, que le config.json de ptts ne porte pas.
+    if let Some(path) = yaml_out {
+        std::fs::write(&path, yaml).with_context(|| format!("cannot write {}", path.display()))?;
+        println!("wrote {}", path.display());
+    }
+
+    let config =
+        Config::parse(yaml).with_context(|| format!("invalid Kyutai config {config_name}"))?;
     let eos_threshold = eos_threshold.unwrap_or(config.default_eos_threshold);
     let ptts_config = config
         .to_ptts(steps, eos_threshold)

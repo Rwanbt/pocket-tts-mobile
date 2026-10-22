@@ -1,0 +1,131 @@
+name: benchmark
+
+# Mesure des packs sur une machine au repos.
+#
+# Les mesures faites sur le poste de travail ne valent rien : plusieurs
+# sessions de compilation y tournent en meme temps, et les temps de generation
+# et la memoire y sont bruites. Ce job rend la reference, sur un runner libre.
+#
+# Il compare les deux formats de poids, bf16 et q8_0, avec le meme jeu de
+# phrases et la meme graine : la difference vient alors du format, pas du
+# hasard.
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Config Kyutai du modele"
+        default: "french_24l"
+      voice:
+        description: "Voix du pack"
+        default: "estelle"
+      frames:
+        description: "Frames apres l'EOS (-1 : ceux de la config)"
+        default: "-1"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  packs:
+    name: bf16 et q8
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Download the checkpoint
+        run: |
+          set -euo pipefail
+          python scripts/download_pack.py --config "${{ inputs.config }}" --out pack/bf16
+          # La config YAML accompagne le pack : elle porte les options du
+          # front-end texte, que le config.json de ptts ne porte pas.
+          cargo run --release --bin make_config -- \
+            --config "${{ inputs.config }}" \
+            --yaml pack/bf16/config.yaml \
+            --out pack/bf16/config.json
+
+      - name: Build the quantised pack
+        # Les poids quantifiés ne remplacent pas les autres : le pack q8 a sa
+        # propre copie du tokenizer et des voix.
+        run: |
+          set -euo pipefail
+          cp pack/bf16/config.yaml pack/bf16/config.json pack/q8/ 2>/dev/null || {
+            mkdir -p pack/q8
+            cp pack/bf16/config.yaml pack/bf16/config.json pack/q8/
+          }
+          cp -r pack/bf16/embeddings pack/q8/embeddings
+          cp pack/bf16/tokenizer.json pack/q8/tokenizer.json
+          cargo run --release --bin make_q8 -- pack/bf16/model.safetensors pack/q8/model.q8.gguf
+          rm -f pack/q8/model.safetensors
+
+      - name: Measure the bf16 pack
+        run: |
+          set -euo pipefail
+          echo "### bf16" >> "$GITHUB_STEP_SUMMARY"
+          cargo run --release --bin bench -- \
+            --pack pack/bf16 --voice "${{ inputs.voice }}" \
+            --frames "${{ inputs.frames }}" --out out/bf16 | tee out-bf16.log
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat out-bf16.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Measure the q8 pack
+        run: |
+          set -euo pipefail
+          echo "### q8_0" >> "$GITHUB_STEP_SUMMARY"
+          cargo run --release --bin bench -- \
+            --pack pack/q8 --voice "${{ inputs.voice }}" \
+            --frames "${{ inputs.frames }}" --out out/q8 | tee out-q8.log
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat out-q8.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare
+        run: |
+          set -euo pipefail
+          echo "### Comparaison" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for pack in bf16 q8; do
+            size=$(du -sh "pack/$pack" | cut -f1)
+            weights=$(du -h "pack/$pack"/model.* 2>/dev/null | cut -f1 | head -1 || echo "-")
+            echo "- **$pack** : pack $size, poids $weights" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pack | ttfa (ms) | rtf | duree (s) | rms |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for pack in bf16 q8; do
+            if [ -f "out/$pack/measurements.tsv" ]; then
+              while IFS=$'\t' read -r ttfa rtf dur rms text; do
+                [ "$ttfa" = "ttfa_ms" ] && continue
+                echo "| $pack | $ttfa | $rtf | $dur | $rms |" >> "$GITHUB_STEP_SUMMARY"
+              done < "out/$pack/measurements.tsv"
+            fi
+          done
+
+      - name: Publish the renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ inputs.config }}-${{ inputs.frames }}
+          path: out/
+          if-no-files-found: error
