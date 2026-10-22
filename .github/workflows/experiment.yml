@@ -64,12 +64,12 @@ jobs:
       - name: Build the config
         # Le pack porte la config YAML : c'est elle qui contient les options
         # du front-end texte, que le config.json de ptts ne porte pas.
-        run: cargo run --release --bin make_config -- --config "${{ inputs.config }}" --yaml pack/config.yaml --out pack/config.json
+        run: cargo run --release --bin make_config --features test-bin -- --config "${{ inputs.config }}" --yaml pack/config.yaml --out pack/config.json
 
       - name: Render both paths
         run: |
           set -euo pipefail
-          cargo run --release --bin ab -- \
+          cargo run --release --bin ab --features test-bin -- \
             --pack pack \
             --frames "${{ inputs.frames }}" \
             ${VOICE:+--voice "$VOICE"} \
