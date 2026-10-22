@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "### bf16" >> "$GITHUB_STEP_SUMMARY"
-          cargo run --release --bin bench -- \
+          cargo run --release --bin bench --features test-bin -- \
             --pack pack/bf16 --voice "${{ inputs.voice }}" \
             --frames "${{ inputs.frames }}" --out out/bf16 | tee out-bf16.log
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -94,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "### q8_0" >> "$GITHUB_STEP_SUMMARY"
-          cargo run --release --bin bench -- \
+          cargo run --release --bin bench --features test-bin -- \
             --pack pack/q8 --voice "${{ inputs.voice }}" \
             --frames "${{ inputs.frames }}" --out out/q8 | tee out-q8.log
           echo '```' >> "$GITHUB_STEP_SUMMARY"
