@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "language": "fr",
+  "sample_rate_hz": 24000,
+  "reference": {
+    "engine": "int8 ONNX (actuel)",
+    "model": "french 24 layers",
+    "wer": 0.048,
+    "rtf": [1.96, 3.19],
+    "note": "Mesures de référence sur Mi 10 Pro. Un rendu est un échantillon : la gate compare un rendu ONNX a reference-<lang>.wav, qui est un unique échantillon PyTorch à default_temperature. Les deux côtés échantillonnent, la gate a donc un taux de réussite et non un booléen."
+  },
+  "notes": [
+    "Les phrases sont choisies pour couvrir les défauts connus du front-end texte.",
+    "Le score se compare au WER de référence (0.048) : un écart de plus de 0.02 est une régression.",
+    "Chaque phrase est rendue une fois par modèle ; pour une mesure stable, répéter 3 fois et prendre la moyenne.",
+    "La transcription se fait avec Parakeet (STT de référence du projet), pas avec un cloud.",
+    "L'accent est vérifié à l'oreille : le pack anglais rendu avec la voix de conditionnement FR donne un accent anglais inacceptable."
+  ],
+  "cases": [
+    {
+      "id": "fr-01",
+      "text": "Bonjour le monde.",
+      "category": "short",
+      "why": "Phrase minimale. Un front-end qui espace les phrases courtes perd le mot final ; c'est le cas le plus fréquent de troncature."
+    },
+    {
+      "id": "fr-02",
+      "text": "Comment ça va ?",
+      "category": "short",
+      "why": "Question courte avec accent aigu (ça) et point d'interrogation."
+    },
+    {
+      "id": "fr-03",
+      "text": "Je vais bien, merci beaucoup.",
+      "category": "short",
+      "why": "Virgule et mot final à ne pas couper."
+    },
+    {
+      "id": "fr-04",
+      "text": "Il fait froid aujourd'hui à Paris.",
+      "category": "short",
+      "why": "Trois accents (froid, aujourd'hui, à) et finale consonne."
+    },
+    {
+      "id": "fr-05",
+      "text": "Où est le dossier des voice models ?",
+      "category": "short",
+      "why": "Terme technique anglais dans une phrase française, plus un point d'interrogation."
+    },
+    {
+      "id": "fr-06",
+      "text": "La dictée vocale est maintenant disponible en français sur ce téléphone, et elle respecte les phrases longues sans les couper.",
+      "category": "long",
+      "why": "Phrase de plus de vingt mots, deux propositions, finale jamais coupée. Cas le plus dur pour le découpage en chunks de 50 tokens."
+    },
+    {
+      "id": "fr-07",
+      "text": "Le premier, le deuxième et le troisième élément de la liste doivent être pronunciés dans le bon ordre.",
+      "category": "long",
+      "why": "Énumération avec virgules, finale alpha. Détecte les mots sautés entre deux chunks."
+    },
+    {
+      "id": "fr-08",
+      "text": "J'ai mangé une pomme ; ensuite, j'ai bu un café.",
+      "category": "punctuation",
+      "why": "Point-virgule : la config FR le lit comme une virgule (remove_semicolons). Un moteur qui l'ignore prononce un point-virgule au lieu d'une pause."
+    },
+    {
+      "id": "fr-09",
+      "text": "Le montant total est de 123 euros et 45 centimes, pour la commande numéro 7890.",
+      "category": "numbers",
+      "why": "Nombres et décimales, avec la virgule décimale française et le mot « centimes »."
+    },
+    {
+      "id": "fr-10",
+      "text": "« Les citations » et les guillemets, ainsi que les tirets cadratins, doivent être rendus correctement.",
+      "category": "punctuation",
+      "why": "Guillemets français, apostrophes typographiques et tirets cadratins : caractères absents des données d'entraînement, remplacés par la config FR (replace_characters)."
+    }
+  ],
+  "measurements": [
+    { "id": "ttfa_ms", "unit": "ms", "why": "Temps jusqu'au premier chunk audio. Cible : < 500 ms." },
+    { "id": "rtf", "unit": "ratio", "why": "temps_generation / duree_audio. Cible : >= 2.0. Référence int8 : 1.96 a 3.19." },
+    { "id": "rss_mb", "unit": "Mo", "why": "Memoire residente. Cible : < 1024 Mo. L'appareil n'a que ~1.5 Go disponibles." },
+    { "id": "wer", "unit": "ratio", "why": "Taux d'erreur de mots, par transcription Parakeet. Cible : <= 0.05." },
+    { "id": "pack_mb", "unit": "Mo", "why": "Taille du pack sur le disque. Le pack int8 actuel pese ~392 Mo." },
+    { "id": "load_s", "unit": "s", "why": "Temps de chargement du modele (ptt_create + ptt_warmup)." }
+  ]
+}

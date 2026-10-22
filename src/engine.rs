@@ -14,6 +14,7 @@
 //! garantit la parité avec le runtime officiel.
 
 use anyhow::{anyhow, Result};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::Arc;
@@ -82,18 +83,41 @@ impl Engine {
         lsd_steps: i32,
         num_threads: i32,
     ) -> Result<Self> {
+        // Le pack est validé avant tout : un pack incomplet doit faire
+        // échouer `ptt_create` (pointeur nul), pas la première synthèse.
+        check_pack(models, voices, tokenizer)?;
+
         // TODO(phase-1): brancher le moteur `ptts` (xn-ptts) une fois son API
         // de construction de `Synth` connue. D'ici là, le backend est un
         // bouchon qui refuse de synthétiser, pour que le reste de l'ABI soit
         // exercable et testable.
-        let backend: Arc<dyn Backend> =
-            Arc::new(Stub::new(models, voices, tokenizer, precision, lsd_steps, num_threads));
-        Ok(Self {
+        let backend: Arc<dyn Backend> = Arc::new(Stub::new(
+            models,
+            voices,
+            tokenizer,
+            precision,
+            lsd_steps,
+            num_threads,
+        ));
+        Ok(Self::with_backend(backend, temperature))
+    }
+
+    /// Construit un moteur autour d'un backend fourni.
+    ///
+    /// Sert aux tests, qui injectent un backend déterministe, et aux phases
+    /// suivantes, où le backend `ptts` remplacera le bouchon.
+    pub fn with_backend(backend: Arc<dyn Backend>, temperature: f32) -> Self {
+        Self {
             backend,
             temperature,
             options: TextOptions::default(),
             started: false,
-        })
+        }
+    }
+
+    /// Options du front-end texte actuellement appliquées.
+    pub fn options(&self) -> TextOptions {
+        self.options
     }
 
     /// Préchauffe le moteur et renvoie la durée en ms.
@@ -115,10 +139,14 @@ impl Engine {
             return Err(anyhow!("text options cannot change after a stream started"));
         }
         if eos_extra_frames < -1 {
-            return Err(anyhow!("eos_extra_frames must be -1 or more, got {eos_extra_frames}"));
+            return Err(anyhow!(
+                "eos_extra_frames must be -1 or more, got {eos_extra_frames}"
+            ));
         }
         if max_chunk_tokens < 0 {
-            return Err(anyhow!("max_chunk_tokens must not be negative, got {max_chunk_tokens}"));
+            return Err(anyhow!(
+                "max_chunk_tokens must not be negative, got {max_chunk_tokens}"
+            ));
         }
         self.options = TextOptions {
             eos_extra_frames,
@@ -173,11 +201,23 @@ pub struct Stream {
 impl Stream {
     /// Renvoie le prochain chunk, en bloquant jusqu'à ce qu'il soit disponible.
     ///
-    /// `None` signale la fin du stream (ou une annulation).
+    /// `None` signale la fin du stream (ou une annulation). Après [`Stream::stop`],
+    /// la lecture est terminée : plus aucun chunk n'est rendu, même si le
+    /// producteur en avait mis en attente.
     pub fn next(&mut self) -> Option<Vec<f32>> {
+        if self.stop.load(Ordering::Relaxed) {
+            return None;
+        }
         loop {
             match self.rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(chunk) => return Some(chunk),
+                Ok(chunk) => {
+                    // Le stream peut avoir été arrêté entre-temps : le chunk
+                    // restant est jeté, pas rendu.
+                    if self.stop.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    return Some(chunk);
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     if self.stop.load(Ordering::Relaxed) {
                         return None;
@@ -203,6 +243,27 @@ impl Drop for Stream {
     }
 }
 
+/// Vérifie qu'un pack est complet avant de construire un moteur.
+///
+/// Un pack incomplet doit être refusé ici : l'appelant voit alors un moteur
+/// nul et peut recharger un autre pack, au lieu de découvrir le problème à la
+/// première synthèse.
+fn check_pack(models: &str, voices: &str, tokenizer: &str) -> Result<()> {
+    let models_path = Path::new(models);
+    if !models_path.is_dir() {
+        return Err(anyhow!("pack models directory missing: {models}"));
+    }
+    let voices_path = Path::new(voices);
+    if !voices_path.is_dir() {
+        return Err(anyhow!("pack voices directory missing: {voices}"));
+    }
+    let tokenizer_path = Path::new(tokenizer);
+    if !tokenizer_path.is_file() {
+        return Err(anyhow!("pack tokenizer missing: {tokenizer}"));
+    }
+    Ok(())
+}
+
 /// Constructeur de canal exposé pour les tests.
 #[cfg(test)]
 fn channel() -> (std::sync::mpsc::SyncSender<Vec<f32>>, Receiver<Vec<f32>>) {
@@ -215,7 +276,10 @@ mod tests {
 
     #[test]
     fn text_options_reject_impossible_values() {
-        let mut engine = Engine::load("m", "v", "t", "f32", 0.5, 1, 2).expect("load");
+        let mut engine = Engine::with_backend(
+            Arc::new(crate::backend::Stub::new("m", "v", "t", "f32", 1, 2)),
+            0.5,
+        );
         assert!(engine.set_text_options(-2, false, true, 50).is_err());
         assert!(engine.set_text_options(8, false, true, -1).is_err());
         assert!(engine.set_text_options(8, false, true, 50).is_ok());
@@ -223,10 +287,33 @@ mod tests {
 
     #[test]
     fn text_options_freeze_after_the_first_stream() {
-        let mut engine = Engine::load("m", "v", "t", "f32", 0.5, 1, 2).expect("load");
+        let mut engine = Engine::with_backend(
+            Arc::new(crate::backend::Stub::new("m", "v", "t", "f32", 1, 2)),
+            0.5,
+        );
         engine.set_text_options(8, false, true, 50).expect("set");
         assert!(engine.start("bonjour", "voice.wav").is_ok());
         assert!(engine.set_text_options(-1, true, false, 0).is_err());
+    }
+
+    #[test]
+    fn a_pack_without_its_files_is_refused() {
+        let err = match Engine::load(
+            "nowhere",
+            "nowhere/voices",
+            "nowhere/tokenizer.json",
+            "f32",
+            0.5,
+            1,
+            2,
+        ) {
+            Ok(_) => panic!("un pack absent doit être refusé"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("models directory missing"),
+            "{err}"
+        );
     }
 
     #[test]

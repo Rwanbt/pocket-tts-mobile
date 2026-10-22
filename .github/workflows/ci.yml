@@ -37,9 +37,6 @@ jobs:
       - name: tests
         run: cargo test
 
-      - name: clippy
-        run: cargo clippy --all-targets -- -D warnings
-
       - name: The shared library exports the ABI
         # L'application echoue au demarrage si un symbole manque. Ce controle
         # reproduit ce que fait `PocketApi::load()` au demarrage de l'app.
@@ -53,6 +50,9 @@ jobs:
             fi
             echo "ok $sym"
           done
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: fmt
         # En dernier : un fichier mal formate ne doit pas masquer le resultat
@@ -70,16 +70,14 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Install the Android SDK and the NDK
-        uses: android-actions/setup-android@v3
-
       - name: Install the NDK
-        run: sdkmanager "ndk;27.2.12479018"
-        env:
-          ANDROID_HOME: ${{ steps.setup-android.outputs.ANDROID_HOME }}
-
-      - name: Export the NDK path
-        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+        # L'archive officielle est plus fiable que sdkmanager : pas de
+        # licence a accepter, pas de version "preview".
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          unzip -q /tmp/ndk.zip -d "$HOME/android-ndk"
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk/android-ndk-r27c" >> "$GITHUB_ENV"
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked

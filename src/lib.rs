@@ -31,6 +31,15 @@ pub mod backend;
 // Moteur, options du front-end texte et streaming
 pub mod engine;
 
+// Résolution de la voix dans un pack
+pub mod voice;
+
+// Contrat PCM partagé avec l'appelant Unifia
+pub mod pcm;
+
+// Pont entre les options de l'ABI et le moteur ptts (frames apres l'EOS)
+pub mod eos;
+
 // Réexporter les types publics pour l'ABI
 pub use ffi::{
     ptt_create, ptt_destroy, ptt_free_audio, ptt_set_text_options, ptt_stream_end,

@@ -63,7 +63,7 @@ unsafe fn cstr<'a>(ptr: *const c_char) -> Option<&'a str> {
 /// # Sécurité
 /// Les pointeurs doivent être des chaînes C vivantes pendant l'appel.
 #[no_mangle]
-pub extern "C" fn ptt_create(
+pub unsafe extern "C" fn ptt_create(
     models_dir: *const c_char,
     voices_dir: *const c_char,
     tokenizer: *const c_char,
@@ -72,19 +72,23 @@ pub extern "C" fn ptt_create(
     lsd_steps: c_int,
     num_threads: c_int,
 ) -> *mut c_void {
-    let (Some(models), Some(voices), Some(tok)) = (unsafe {
-        (
-            cstr(models_dir),
-            cstr(voices_dir),
-            cstr(tokenizer),
-        )
-    }) else {
+    let (Some(models), Some(voices), Some(tok)) =
+        (unsafe { (cstr(models_dir), cstr(voices_dir), cstr(tokenizer)) })
+    else {
         error!("ptt_create: NULL path argument");
         return ptr::null_mut();
     };
     let prec = unsafe { cstr(precision) }.unwrap_or("f32");
 
-    match Engine::load(models, voices, tok, prec, temperature, lsd_steps, num_threads) {
+    match Engine::load(
+        models,
+        voices,
+        tok,
+        prec,
+        temperature,
+        lsd_steps,
+        num_threads,
+    ) {
         Ok(engine) => {
             info!(
                 "[voice] Pocket Rust engine loaded: models={models} voices={voices} \
@@ -108,7 +112,7 @@ pub extern "C" fn ptt_create(
 /// `engine` doit venir de `ptt_create` et n'être libéré qu'une fois, après
 /// la fin de tous ses streams.
 #[no_mangle]
-pub extern "C" fn ptt_destroy(engine: *mut c_void) {
+pub unsafe extern "C" fn ptt_destroy(engine: *mut c_void) {
     if engine.is_null() {
         return;
     }
@@ -119,7 +123,7 @@ pub extern "C" fn ptt_destroy(engine: *mut c_void) {
 
 /// Préchauffe le moteur et renvoie la durée en ms.
 #[no_mangle]
-pub extern "C" fn ptt_warmup(engine: *mut c_void) -> f64 {
+pub unsafe extern "C" fn ptt_warmup(engine: *mut c_void) -> f64 {
     if engine.is_null() {
         return 0.0;
     }
@@ -148,7 +152,7 @@ pub extern "C" fn ptt_warmup(engine: *mut c_void) -> f64 {
 /// # Safety
 /// `engine` doit venir de `ptt_create`.
 #[no_mangle]
-pub extern "C" fn ptt_set_text_options(
+pub unsafe extern "C" fn ptt_set_text_options(
     engine: *mut c_void,
     eos_extra_frames: c_int,
     pad_short_inputs: c_int,
@@ -188,7 +192,7 @@ pub extern "C" fn ptt_set_text_options(
 /// `engine` doit venir de `ptt_create` ; `text` et `voice` doivent être des
 /// chaînes C vivantes pendant l'appel.
 #[no_mangle]
-pub extern "C" fn ptt_stream_start(
+pub unsafe extern "C" fn ptt_stream_start(
     engine: *mut c_void,
     text: *const c_char,
     voice: *const c_char,
@@ -229,7 +233,7 @@ pub extern "C" fn ptt_stream_start(
 /// # Safety
 /// `stream` doit venir de `ptt_stream_start` et être vivant.
 #[no_mangle]
-pub extern "C" fn ptt_stream_read(
+pub unsafe extern "C" fn ptt_stream_read(
     stream: *mut c_void,
     out_samples: *mut *mut f32,
     out_length: *mut c_int,
@@ -263,7 +267,7 @@ pub extern "C" fn ptt_stream_read(
 /// # Safety
 /// `stream` doit venir de `ptt_stream_start` et ne pas avoir déjà été libéré.
 #[no_mangle]
-pub extern "C" fn ptt_stream_end(stream: *mut c_void) {
+pub unsafe extern "C" fn ptt_stream_end(stream: *mut c_void) {
     if stream.is_null() {
         return;
     }
@@ -276,7 +280,7 @@ pub extern "C" fn ptt_stream_end(stream: *mut c_void) {
 /// # Sécurité
 /// `samples` doit provenir de `ptt_stream_read` et n'avoir pas déjà été libéré.
 #[no_mangle]
-pub extern "C" fn ptt_free_audio(samples: *mut f32) {
+pub unsafe extern "C" fn ptt_free_audio(samples: *mut f32) {
     if samples.is_null() {
         return;
     }
@@ -325,23 +329,43 @@ mod tests {
 
     #[test]
     fn null_arguments_are_rejected() {
-        assert!(ptt_create(ptr::null(), ptr::null(), ptr::null(), ptr::null(), 0.0, 0, 0).is_null());
-        assert!(ptt_stream_start(ptr::null_mut(), ptr::null(), ptr::null()).is_null());
-        assert_eq!(ptt_stream_read(ptr::null_mut(), ptr::null_mut(), ptr::null_mut()), 0);
-        assert_eq!(ptt_warmup(ptr::null_mut()), 0.0);
-        assert_eq!(ptt_set_text_options(ptr::null_mut(), 0, 0, 0, 0), 1);
+        // SAFETY: les pointeurs sont volontairement invalides, la fonction
+        // doit les refuser sans les dereferencer.
+        unsafe {
+            assert!(ptt_create(
+                ptr::null(),
+                ptr::null(),
+                ptr::null(),
+                ptr::null(),
+                0.0,
+                0,
+                0
+            )
+            .is_null());
+            assert!(ptt_stream_start(ptr::null_mut(), ptr::null(), ptr::null()).is_null());
+            assert_eq!(
+                ptt_stream_read(ptr::null_mut(), ptr::null_mut(), ptr::null_mut()),
+                0
+            );
+            assert_eq!(ptt_warmup(ptr::null_mut()), 0.0);
+            assert_eq!(ptt_set_text_options(ptr::null_mut(), 0, 0, 0, 0), 1);
+        }
     }
 
     #[test]
     fn destroy_and_end_tolerate_null() {
-        ptt_destroy(ptr::null_mut());
-        ptt_stream_end(ptr::null_mut());
-        ptt_free_audio(ptr::null_mut());
+        // SAFETY: NULL est accepte par ces trois fonctions.
+        unsafe {
+            ptt_destroy(ptr::null_mut());
+            ptt_stream_end(ptr::null_mut());
+            ptt_free_audio(ptr::null_mut());
+        }
     }
 
     #[test]
     fn free_audio_accepts_a_null_pointer() {
-        ptt_free_audio(ptr::null_mut());
+        // SAFETY: NULL est accepte.
+        unsafe { ptt_free_audio(ptr::null_mut()) };
     }
 
     #[test]
@@ -357,6 +381,42 @@ mod tests {
         // SAFETY: `ptr` porte `len` samples valides, alloués par `alloc_audio`.
         let read = unsafe { std::slice::from_raw_parts(ptr, len) };
         assert_eq!(read, &samples[..]);
+        // SAFETY: le tampon est libéré une seule fois.
+        unsafe { free_audio(ptr) };
+    }
+
+    #[test]
+    fn the_allocator_survives_every_size() {
+        // Balayage exhaustif : un décalage d'un octet dans l'en-tête se
+        // verrait sur une seule taille, pas sur toutes.
+        for len in 0..=4096usize {
+            let samples: Vec<f32> = (0..len).map(|i| i as f32 * 0.5 - 2048.0).collect();
+            let ptr = alloc_audio(&samples);
+            assert!(!ptr.is_null(), "allocation refusée pour {len} samples");
+            // SAFETY: `ptr` vient de `alloc_audio` et n'est pas encore libéré.
+            let got = unsafe { *(ptr as *const u32).sub(1) } as usize;
+            assert_eq!(got, len, "longueur erronée pour {len} samples");
+            // L'alignement f32 (4 octets) doit être préservé par l'en-tête.
+            assert_eq!(
+                (ptr as usize) % std::mem::align_of::<f32>(),
+                0,
+                "alignement cassé pour {len} samples"
+            );
+            // SAFETY: `ptr` porte `len` samples valides, alloués par `alloc_audio`.
+            let read = unsafe { std::slice::from_raw_parts(ptr, len) };
+            assert_eq!(read, &samples[..], "corruption pour {len} samples");
+            // SAFETY: le tampon est libéré une seule fois.
+            unsafe { free_audio(ptr) };
+        }
+    }
+
+    #[test]
+    fn an_empty_chunk_allocates_a_usable_buffer() {
+        let ptr = alloc_audio(&[]);
+        assert!(!ptr.is_null());
+        // SAFETY: `ptr` vient de `alloc_audio` ; l'en-tête indique 0 sample.
+        let got = unsafe { *(ptr as *const u32).sub(1) } as usize;
+        assert_eq!(got, 0);
         // SAFETY: le tampon est libéré une seule fois.
         unsafe { free_audio(ptr) };
     }

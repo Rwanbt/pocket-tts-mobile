@@ -15,7 +15,9 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use pocket_tts_mobile::ffi::{ptt_create, ptt_free, ptt_stream_end, ptt_stream_read, ptt_stream_start};
+use pocket_tts_mobile::ffi::{
+    ptt_create, ptt_free, ptt_stream_end, ptt_stream_read, ptt_stream_start,
+};
 use std::ffi::CString;
 
 /// Outil de test pour Pocket TTS Mobile
@@ -68,21 +70,22 @@ fn main() -> Result<()> {
     }
 
     // Démarrer le stream
-    let result = unsafe { ptt_stream_start(handle, text_c.as_ptr(), args.temperature, args.voice_id) };
+    let result =
+        unsafe { ptt_stream_start(handle, text_c.as_ptr(), args.temperature, args.voice_id) };
     if result != 0 {
         anyhow::bail!("Failed to start stream");
     }
 
     // Lire le stream et écrire dans le fichier WAV
     let mut wav_file = File::create(&args.output)?;
-    
+
     // Écrire l'en-tête WAV (24 kHz mono f32)
     // Note: Pour simplifier, on écrit en raw f32 pour l'instant
     // TODO: Ajouter l'en-tête WAV complet
     let sample_rate = 24000;
     let bits_per_sample = 32;
     let channels = 1;
-    
+
     // Buffer temporaire pour les chunks
     const BUFFER_SIZE: usize = 1024;
     let mut buffer = vec![0.0f32; BUFFER_SIZE];
@@ -94,22 +97,31 @@ fn main() -> Result<()> {
             break;
         }
         let n = n as usize;
-        
+
         // Écrire les samples dans le fichier (raw f32 pour l'instant)
         for i in 0..n {
-            wav_file.write_all(&buffer[i..i+1].iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>())?;
+            wav_file.write_all(
+                &buffer[i..i + 1]
+                    .iter()
+                    .flat_map(|x| x.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            )?;
         }
         total_samples += n;
     }
 
     // Terminer le stream
     unsafe { ptt_stream_end(handle) };
-    
+
     // Libérer la session
     unsafe { ptt_free(handle) };
 
     if args.verbose {
-        println!("Generated {} samples ({} seconds at 24 kHz)", total_samples, total_samples as f32 / sample_rate as f32);
+        println!(
+            "Generated {} samples ({} seconds at 24 kHz)",
+            total_samples,
+            total_samples as f32 / sample_rate as f32
+        );
         println!("Output written to: {}", args.output.display());
     }
 

@@ -125,7 +125,13 @@ mod tests {
         let stub = Stub::new("m", "v", "t", "int8", 1, 2);
         let mut sink = |_chunk: Vec<f32>| Ok(());
         let err = stub
-            .generate("bonjour", "voice.wav", TextOptions::default(), 0.5, &mut sink)
+            .generate(
+                "bonjour",
+                "voice.wav",
+                TextOptions::default(),
+                0.5,
+                &mut sink,
+            )
             .expect_err("stub must refuse");
         assert!(err.to_string().contains("not wired yet"), "{err}");
     }
