@@ -69,6 +69,7 @@ jobs:
       - name: Render both paths
         run: |
           set -euo pipefail
+          cargo clean -p pocket-tts-mobile
           cargo run --release --bin ab --features test-bin -- \
             --pack pack \
             --frames "${{ inputs.frames }}" \
