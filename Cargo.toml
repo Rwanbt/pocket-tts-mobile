@@ -22,6 +22,8 @@ xn = "0.2.11"
 # Sérialisation (YAML/JSON)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# Lecture des configs YAML Kyutai (adaptateur)
+serde_yaml = "0.9"
 
 # Gestion des erreurs
 anyhow = "1.0"

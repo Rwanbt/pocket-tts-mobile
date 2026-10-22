@@ -22,6 +22,9 @@
 // Module FFI (ABI C)
 pub mod ffi;
 
+// Adaptateur Kyutai : configs YAML -> config.json de ptts, et préparation du texte
+pub mod kyutai;
+
 // Backend de synthèse (moteur d'inférence)
 pub mod backend;
 
