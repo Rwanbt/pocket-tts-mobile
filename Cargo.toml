@@ -52,6 +52,8 @@ path-clean = "1.0"
 default = []
 # Feature pour le build Android
 android = []
+# Feature pour les binaires de test (speak, bench, etc.)
+test-bin = []
 
 [dev-dependencies]
 # Pour les tests unitaires
@@ -70,4 +72,34 @@ inherits = "release"
 # Optimisations pour Android (ARMv8.2)
 codegen-units = 1
 panic = "abort"
+
+[[bin]]
+name = "speak"
+path = "src/bin/speak.rs"
+required-features = ["test-bin"]
+test = false
+
+[[bin]]
+name = "bench"
+path = "src/bin/bench.rs"
+required-features = ["test-bin"]
+test = false
+
+[[bin]]
+name = "make_q8"
+path = "src/bin/make_q8.rs"
+required-features = ["test-bin"]
+test = false
+
+[[bin]]
+name = "make_config"
+path = "src/bin/make_config.rs"
+required-features = ["test-bin"]
+test = false
+
+[[bin]]
+name = "ab"
+path = "src/bin/ab.rs"
+required-features = ["test-bin"]
+test = false
 
