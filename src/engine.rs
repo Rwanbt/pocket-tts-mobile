@@ -13,15 +13,15 @@
 //! après EOS au lieu de 8) : les appliquer ici, et non dans l'appelant,
 //! garantit la parité avec le runtime officiel.
 
-use anyhow::{anyhow, Result};
-use std::path::Path;
+use anyhow::{anyhow, Context, Result};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::backend::{Backend, Stub};
+use crate::backend::Backend;
 
 /// Options du front-end texte, telles que passées par `ptt_set_text_options`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,11 +75,18 @@ pub struct Engine {
 impl Engine {
     /// Charge un pack et prépare le moteur.
     ///
-    /// Le pack est auto-descriptif : il porte la config Kyutai en YAML
-    /// (`config.yaml`), les poids (`model.safetensors` ou `model.q8.gguf`), le
-    /// tokenizer (`tokenizer.json`) et les voix (`embeddings/`). La config YAML
-    /// est necessaire parce que les options du front-end texte n'existent que
-    /// la : le `config.json` de `ptts` ne les porte pas.
+    /// Le pack est auto-descriptif :
+    ///
+    /// ```text
+    /// voice-models/pocket/<langue>/
+    /// ├── config.yaml            la config Kyutai (YAML)
+    /// ├── model.safetensors      les poids (ou model.q8.gguf)
+    /// ├── tokenizer.json         le tokenizer
+    /// └── embeddings/            les voix (etats de cache KV)
+    /// ```
+    ///
+    /// La config YAML est necessaire parce que les options du front-end texte
+    /// n'existent que la : le `config.json` de `ptts` ne les porte pas.
     pub fn load(
         models: &str,
         voices: &str,
@@ -92,20 +99,23 @@ impl Engine {
         // Le pack est validé avant tout : un pack incomplet doit faire
         // échouer `ptt_create` (pointeur nul), pas la première synthèse.
         check_pack(models, voices, tokenizer)?;
-
-        // TODO(phase-1): brancher le moteur `ptts` (xn-ptts) une fois son API
-        // de construction de `Synth` connue. D'ici là, le backend est un
-        // bouchon qui refuse de synthétiser, pour que le reste de l'ABI soit
-        // exercable et testable.
-        let backend: Arc<dyn Backend> = Arc::new(Stub::new(
-            models,
-            voices,
-            tokenizer,
-            precision,
-            lsd_steps,
-            num_threads,
-        ));
-        Ok(Self::with_backend(backend, temperature))
+        let weights = find_weights(Path::new(models))?;
+        let yaml = std::fs::read_to_string(Path::new(models).join("config.yaml"))
+            .context("the pack has no config.yaml")?;
+        let config = crate::kyutai::config::Config::parse(&yaml)
+            .context("the pack's config.yaml cannot be read")?;
+        let origin = crate::kyutai::config::Origin::Custom(models.to_owned());
+        let backend = crate::backend::Kyutai::load(
+            config,
+            origin,
+            &PathBuf::from(models),
+            &PathBuf::from(voices),
+            &weights,
+            temperature,
+            None,
+        )?;
+        let _ = (precision, lsd_steps, num_threads);
+        Ok(Self::with_backend(Arc::new(backend), temperature))
     }
 
     /// Construit un moteur autour d'un backend fourni.
@@ -271,6 +281,23 @@ fn check_pack(models: &str, voices: &str, tokenizer: &str) -> Result<()> {
         return Err(anyhow!("pack tokenizer missing: {tokenizer}"));
     }
     Ok(())
+}
+
+/// Le fichier de poids d'un pack, quantifié s'il existe.
+///
+/// Le choix se fait sur le nom du fichier, comme dans `ptts` : le quantifié
+/// passe avant, sinon le pack ne serait pas chargé.
+fn find_weights(pack: &Path) -> Result<PathBuf> {
+    for name in ["model.q8.gguf", "model.safetensors"] {
+        let path = pack.join(name);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+    Err(anyhow!(
+        "the pack has no weights: expected model.q8.gguf or model.safetensors in {}",
+        pack.display()
+    ))
 }
 
 /// Constructeur de canal exposé pour les tests.
