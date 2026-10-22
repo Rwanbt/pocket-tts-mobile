@@ -1,0 +1,108 @@
+name: experiment
+
+# L'experimentation A/B : le chemin stock du moteur contre le chemin de bas
+# niveau. Elle est declenchee a la main, parce qu'elle telecharge le modele
+# francais 24 couches (641 Mo) et rend une dizaine de WAV.
+on:
+  workflow_dispatch:
+    inputs:
+      frames:
+        description: "Nombre de frames apres l'EOS a comparer, separe par des virgules"
+        default: "1,3,8"
+      config:
+        description: "Config Kyutai embarquee a utiliser"
+        default: "french_24l"
+      voice:
+        description: "Voix du pack (vide pour la voix par defaut)"
+        default: "estelle"
+
+env:
+  HF_REPO: kyutai/pocket-tts-without-voice-cloning
+  HF_REV: 1e08e6a23401048648a9fdcfde2f89348215c2a7
+
+jobs:
+  ab:
+    name: frames apres l'EOS
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Download the French checkpoint
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from huggingface_hub import hf_hub_download
+          repo = os.environ["HF_REPO"]
+          rev = os.environ["HF_REV"]
+          pack = os.environ.get("PACK", "pack")
+          os.makedirs(pack, exist_ok=True)
+          files = [
+              ("languages/french_24l/model.safetensors", "model.safetensors"),
+              ("languages/french_24l/tokenizer.json", "tokenizer.json"),
+              ("languages/french_24l/embeddings/estelle.safetensors", "embeddings/estelle.safetensors"),
+          ]
+          for src, dst in files:
+              out = os.path.join(pack, dst)
+              os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+              path = hf_hub_download(repo, src, revision=rev)
+              os.replace(path, out)
+              print("ok", dst, os.path.getsize(out))
+          PY'
+        env:
+          PACK: pack
+
+      - name: Prepare the weights for ptts
+        # Kyutai expose flow_lm.bos_before_voice, que ptts attend sous un autre
+        # nom. ptts::loader::remap_key ne fait pas ce renommage, il est donc
+        # fait ici, une fois, hors ligne.
+        run: |
+          set -euo pipefail
+          python scripts/prepare_pack.py pack/model.safetensors pack/model.patched.safetensors
+          mv pack/model.patched.safetensors pack/model.safetensors
+
+      - name: Build the config
+        run: cargo run --release --bin make_config -- --config "${{ inputs.config }}" --out pack/config.json
+
+      - name: Render both paths
+        run: |
+          set -euo pipefail
+          cargo run --release --bin ab -- \
+            --pack pack \
+            --frames "${{ inputs.frames }}" \
+            ${VOICE:+--voice "$VOICE"} \
+            --out out
+        env:
+          VOICE: ${{ inputs.voice }}
+
+      - name: Analyse the renders
+        run: python scripts/analyze_wav.py out/*.wav || true
+
+      - name: Publish the renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: ab-${{ inputs.config }}-${{ inputs.frames }}
+          path: out/
+          if-no-files-found: error
