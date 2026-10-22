@@ -54,7 +54,7 @@ pub trait Backend: Send + Sync {
         voice: &str,
         options: TextOptions,
         temperature: f32,
-        sink: &mut dyn FnMut(Vec<f32>) -> Result<()>,
+        sink: &mut (dyn FnMut(Vec<f32>) -> Result<()> + Send),
     ) -> Result<()>;
 }
 
@@ -98,12 +98,15 @@ pub trait Runner: Send + Sync {
     fn warmup(&self) -> Result<()>;
 
     /// Synthétise et pousse les chunks dans `sink`.
+    ///
+    /// La temperature n'est pas un parametre d'appel : elle est fixee au
+    /// chargement du modele, comme dans le runtime d'origine.
     fn generate(
         &self,
         voice: &str,
         text: &str,
         options: TextOptions,
-        temperature: f32,
+        _temperature: f32,
         stop: &AtomicBool,
         sink: &mut (dyn FnMut(&[f32]) -> Result<()> + Send),
     ) -> Result<()>;
@@ -112,20 +115,22 @@ pub trait Runner: Send + Sync {
 impl Kyutai {
     /// Charge un pack et prépare le moteur.
     ///
-    /// `precision` vaut `"f32"` ou `"q8"` ; le runtime d'origine ne sait pas
-    /// mélanger les deux dans un même processus, le choix est donc fait ici, une
-    /// fois, au chargement.
+    /// `config` est la config Kyutai du modele (YAML), qui porte les options
+    /// du front-end texte : le `config.json` de `ptts` ne les contient pas, et
+    /// le runtime en a besoin.
+    ///
+    /// `precision` n'a pas besoin d'etre passe : il se deduit du fichier de
+    /// poids, le runtime d'origine ne sachant pas melanger les deux dans un
+    /// meme processus.
     pub fn load(
-        config_name: &str,
+        config: Config,
+        origin: crate::kyutai::config::Origin,
         models_dir: &PathBuf,
         voices_dir: &PathBuf,
         weights: &PathBuf,
         temperature: f32,
         eos_threshold: Option<f32>,
     ) -> Result<Self> {
-        // La config Kyutai embarquee, dont on ne garde que l'architecture.
-        let (config, origin) = Config::load(Some(config_name), None)
-            .with_context(|| format!("cannot read the {config_name} config"))?;
         let options = LoadOptions {
             temperature: Some(temperature),
             sampler_decode_steps: 1,
@@ -136,6 +141,7 @@ impl Kyutai {
         let mut config = config;
         config.weights_path = Some(weights.to_string_lossy().to_string());
         config.weights_path_without_voice_cloning = None;
+        let _ = models_dir;
 
         let inner: Box<dyn Runner> = match precision_of(weights) {
             Precision::F32 => Box::new(Runtime::<Unquantized<f32, CpuDevice>>::load(
@@ -198,7 +204,10 @@ impl<Q: CpuBackend + Send + Sync> Runner for Runtime<Q> {
     }
 
     fn warmup(&self) -> Result<()> {
-        let inner = self.inner.lock().map_err(|_| "model poisoned")?;
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("model poisoned"))?;
         let _ = inner.model.sample_rate();
         Ok(())
     }
@@ -208,11 +217,14 @@ impl<Q: CpuBackend + Send + Sync> Runner for Runtime<Q> {
         voice: &str,
         text: &str,
         options: TextOptions,
-        temperature: f32,
+        _temperature: f32,
         stop: &AtomicBool,
         sink: &mut (dyn FnMut(&[f32]) -> Result<()> + Send),
     ) -> Result<()> {
-        let mut inner = self.inner.lock().map_err(|_| "model poisoned")?;
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("model poisoned"))?;
         // Le runtime utilise les options de texte de sa config ; celles de
         // l'appelant doivent les remplacer, sans quoi le francais perdrait le
         // traitement des points-virgules.
@@ -272,7 +284,7 @@ impl Backend for Kyutai {
         voice: &str,
         options: TextOptions,
         temperature: f32,
-        sink: &mut dyn FnMut(Vec<f32>) -> Result<()>,
+        sink: &mut (dyn FnMut(Vec<f32>) -> Result<()> + Send),
     ) -> Result<()> {
         let stop = AtomicBool::new(false);
         let mut forward = |pcm: &[f32]| -> Result<()> { sink(pcm.to_vec()) };
@@ -349,7 +361,7 @@ impl Backend for Stub {
         voice: &str,
         _options: TextOptions,
         _temperature: f32,
-        _sink: &mut dyn FnMut(Vec<f32>) -> Result<()>,
+        _sink: &mut (dyn FnMut(Vec<f32>) -> Result<()> + Send),
     ) -> Result<()> {
         bail!("{NOT_IMPLEMENTED} (text={text:?}, voice={voice:?})")
     }

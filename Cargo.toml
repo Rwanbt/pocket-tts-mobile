@@ -34,8 +34,16 @@ tracing = "0.1"
 # Pour le FFI et la compatibilité C
 libloading = "0.8"
 
-# Pour la génération aléatoire (bruit, température)
-rand = "0.8"
+# Dépendances du runtime Kyutai vendorisé (src/kyutai/)
+# Les versions sont celles du runtime officiel, pour que les deux restent
+# interchangeables.
+log = "0.4"
+rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
+rand_distr = "0.5"
+symphonia = { version = "0.5.3", features = ["all"] }
+tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
+half = "2"
+safetensors = "0.7"
 
 # Pour la gestion des chemins et des fichiers
 path-clean = "1.0"

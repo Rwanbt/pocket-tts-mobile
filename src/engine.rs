@@ -74,6 +74,12 @@ pub struct Engine {
 
 impl Engine {
     /// Charge un pack et prépare le moteur.
+    ///
+    /// Le pack est auto-descriptif : il porte la config Kyutai en YAML
+    /// (`config.yaml`), les poids (`model.safetensors` ou `model.q8.gguf`), le
+    /// tokenizer (`tokenizer.json`) et les voix (`embeddings/`). La config YAML
+    /// est necessaire parce que les options du front-end texte n'existent que
+    /// la : le `config.json` de `ptts` ne les porte pas.
     pub fn load(
         models: &str,
         voices: &str,

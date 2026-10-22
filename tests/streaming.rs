@@ -49,7 +49,7 @@ impl Backend for Fake {
         _voice: &str,
         _options: TextOptions,
         _temperature: f32,
-        sink: &mut dyn FnMut(Vec<f32>) -> anyhow::Result<()>,
+        sink: &mut (dyn FnMut(Vec<f32>) -> anyhow::Result<()> + Send),
     ) -> anyhow::Result<()> {
         if self.panic {
             panic!("backend panic on purpose");
@@ -82,7 +82,7 @@ impl Backend for Watcher {
         _voice: &str,
         _options: TextOptions,
         _temperature: f32,
-        sink: &mut dyn FnMut(Vec<f32>) -> anyhow::Result<()>,
+        sink: &mut (dyn FnMut(Vec<f32>) -> anyhow::Result<()> + Send),
     ) -> anyhow::Result<()> {
         for _ in 0..1000 {
             if self.cancelled.load(Ordering::Relaxed) {
