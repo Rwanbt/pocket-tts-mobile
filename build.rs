@@ -18,7 +18,12 @@ fn main() {
         .unwrap_or_else(|e| panic!("cannot list {}: {e}", configs_dir.display()))
         .map(|entry| entry.unwrap().path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
-        .map(|path| (path.file_stem().unwrap().to_string_lossy().into_owned(), path))
+        .map(|path| {
+            (
+                path.file_stem().unwrap().to_string_lossy().into_owned(),
+                path,
+            )
+        })
         .collect();
     configs.sort();
 
