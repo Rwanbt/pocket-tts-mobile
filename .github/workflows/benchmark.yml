@@ -60,7 +60,7 @@ jobs:
           python scripts/download_pack.py --config "${{ inputs.config }}" --out pack/bf16
           # La config YAML accompagne le pack : elle porte les options du
           # front-end texte, que le config.json de ptts ne porte pas.
-          cargo run --release --bin make_config -- \
+          cargo run --release --bin make_config --features test-bin -- \
             --config "${{ inputs.config }}" \
             --yaml pack/bf16/config.yaml \
             --out pack/bf16/config.json
@@ -76,7 +76,7 @@ jobs:
           }
           cp -r pack/bf16/embeddings pack/q8/embeddings
           cp pack/bf16/tokenizer.json pack/q8/tokenizer.json
-          cargo run --release --bin make_q8 -- pack/bf16/model.safetensors pack/q8/model.q8.gguf
+          cargo run --release --bin make_q8 --features test-bin -- pack/bf16/model.safetensors pack/q8/model.q8.gguf
           rm -f pack/q8/model.safetensors
 
       - name: Measure the bf16 pack
