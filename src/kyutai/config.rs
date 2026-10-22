@@ -3,7 +3,7 @@
 //! Repris de <https://github.com/kyutai-labs/pocket-tts> (`rust/src/config.rs`), MIT.
 //! Voir `vendor/kyutai-configs/LICENSE`.
 //!
-//! Adaptation : les chemins `crate::defaults` / `crate::download` pointent vers
+//! Adaptation : les chemins `crate::kyutai::defaults` / `crate::kyutai::download` pointent vers
 //! `crate::kyutai::*`, et le crate `log` est remplacé par `tracing`. Le reste est inchangé.
 //! The YAML model configs of `pocket_tts/utils/config.py`, and their translation to the
 //! `config.json` schema of xn-ptts.
