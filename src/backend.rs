@@ -21,7 +21,7 @@
 //! (`ptts::tts_model::TTSModel`), donc il n'y a pas de duplication.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 
@@ -122,13 +122,18 @@ impl Kyutai {
     /// `precision` n'a pas besoin d'etre passe : il se deduit du fichier de
     /// poids, le runtime d'origine ne sachant pas melanger les deux dans un
     /// meme processus.
+    ///
+    /// Sept arguments sont necessaires : le moteur a besoin de chacun d'eux,
+    /// et les regrouper dans une structure ne ferait que deplacer la
+    /// complexite sans la reduire.
+    #[allow(clippy::too_many_arguments)]
     pub fn load(
         config: Config,
         origin: crate::kyutai::config::Origin,
-        models_dir: &PathBuf,
-        voices_dir: &PathBuf,
-        weights: &PathBuf,
-        tokenizer: &PathBuf,
+        models_dir: &Path,
+        voices_dir: &Path,
+        weights: &Path,
+        tokenizer: &Path,
         temperature: f32,
         eos_threshold: Option<f32>,
     ) -> Result<Self> {
@@ -152,13 +157,13 @@ impl Kyutai {
                 config,
                 origin,
                 options,
-                voices_dir.clone(),
+                voices_dir.to_path_buf(),
             )?),
             Precision::Q8 => Box::new(Runtime::<Q80F32>::load(
                 config,
                 origin,
                 options,
-                voices_dir.clone(),
+                voices_dir.to_path_buf(),
             )?),
         };
         Ok(Self { inner })
@@ -172,7 +177,7 @@ enum Precision {
 }
 
 /// Deduit la precision du pack de l'extension du fichier de poids.
-fn precision_of(weights: &PathBuf) -> Precision {
+fn precision_of(weights: &Path) -> Precision {
     match weights.extension().and_then(|ext| ext.to_str()) {
         Some("gguf") => Precision::Q8,
         _ => Precision::F32,
@@ -233,7 +238,7 @@ impl<Q: CpuBackend + Send + Sync> Runner for Runtime<Q> {
         // l'appelant doivent les remplacer, sans quoi le francais perdrait le
         // traitement des points-virgules.
         let text_options =
-            crate::eos::effective_text_options(&inner.model.text_options(), &options);
+            crate::eos::effective_text_options(inner.model.text_options(), &options);
         inner.model.set_text_options(text_options);
         // La voix est chargee au premier usage, puis conservee : la relire a
         // chaque enonce coûterait 28 Mo de lecture par phrase.
