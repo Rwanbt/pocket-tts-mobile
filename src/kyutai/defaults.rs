@@ -195,7 +195,13 @@ mod tests {
     fn defaults_follow_the_language_substring() {
         assert!(get_default_text_for_language(Some("french_24l")).starts_with("Bonjour"));
         assert!(get_default_text_for_language(None).starts_with("Hello"));
-        assert_eq!(get_default_voice_for_language(Some("italian_24l"), false), "giovanni");
-        assert_eq!(get_default_voice_for_language(Some("english_2026-04"), false), "alba");
+        assert_eq!(
+            get_default_voice_for_language(Some("italian_24l"), false),
+            "giovanni"
+        );
+        assert_eq!(
+            get_default_voice_for_language(Some("english_2026-04"), false),
+            "alba"
+        );
     }
 }

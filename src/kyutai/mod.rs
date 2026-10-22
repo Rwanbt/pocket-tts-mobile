@@ -49,7 +49,10 @@ pub mod weights;
 ///
 /// Les configs viennent de `vendor/kyutai-configs`, embarquees par `build.rs`.
 pub fn config_yaml(name: &str) -> Option<&'static str> {
-    config::CONFIGS.iter().find(|(n, _)| *n == name).map(|(_, yaml)| *yaml)
+    config::CONFIGS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, yaml)| *yaml)
 }
 
 /// Les noms des langues disponibles.

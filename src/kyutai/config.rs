@@ -11,7 +11,7 @@
 //! The configs of the Python package are embedded in the binary; any other YAML file, local or
 //! remote, is read with the same schema, unknown fields being an error as with pydantic.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 pub use ptts::flow_lm::FlowType;
 use serde::Deserialize;
 use std::collections::BTreeMap;

@@ -1,7 +1,7 @@
 //! Loading pocket-tts safetensors weights into xn-ptts, whose names for them differ, and reading
 //! the voice states the Python package writes.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};

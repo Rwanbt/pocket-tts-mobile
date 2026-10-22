@@ -23,7 +23,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 use pocket_tts_mobile::engine::Engine;
 
@@ -55,9 +55,8 @@ fn parse_args() -> Result<Args> {
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
-        let mut value = || -> Result<String> {
-            args.next().with_context(|| format!("{arg} needs a value"))
-        };
+        let mut value =
+            || -> Result<String> { args.next().with_context(|| format!("{arg} needs a value")) };
         match arg.as_str() {
             "--pack" => pack = PathBuf::from(value()?),
             "--voice" => voice = value()?,
@@ -145,12 +144,7 @@ fn main() -> Result<()> {
         2,
     )?;
     engine
-        .set_text_options(
-            args.frames,
-            false,
-            true,
-            50,
-        )
+        .set_text_options(args.frames, false, true, 50)
         .context("the pack rejected the text options")?;
     engine.warmup().context("the warmup failed")?;
     let load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
@@ -177,16 +171,18 @@ fn main() -> Result<()> {
         }
         let elapsed = start.elapsed().as_secs_f64();
         let duration = total as f64 / 24_000.0;
-        let rtf = if duration > 0.0 { elapsed / duration } else { 0.0 };
+        let rtf = if duration > 0.0 {
+            elapsed / duration
+        } else {
+            0.0
+        };
         let ttfa = first.unwrap_or(0.0);
         let rms = if pcm.is_empty() {
             0.0
         } else {
             (pcm.iter().map(|v| (*v as f64) * (*v as f64)).sum::<f64>() / pcm.len() as f64).sqrt()
         };
-        println!(
-            "ttfa={ttfa:.0}ms rtf={rtf:.3} duration={duration:.2}s rms={rms:.5} | {text}"
-        );
+        println!("ttfa={ttfa:.0}ms rtf={rtf:.3} duration={duration:.2}s rms={rms:.5} | {text}");
         rows.push(format!(
             "{ttfa:.0}\t{rtf:.3}\t{duration:.2}\t{rms:.5}\t{text}"
         ));

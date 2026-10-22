@@ -6,7 +6,7 @@
 //!
 //! Voir `vendor/kyutai-configs/LICENSE`.
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use std::path::PathBuf;
 
 /// Renvoie le chemin local du fichier, ou une erreur si le chemin est distant.

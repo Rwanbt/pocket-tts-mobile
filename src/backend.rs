@@ -237,8 +237,7 @@ impl<Q: CpuBackend + Send + Sync> Runner for Runtime<Q> {
         // Le runtime utilise les options de texte de sa config ; celles de
         // l'appelant doivent les remplacer, sans quoi le francais perdrait le
         // traitement des points-virgules.
-        let text_options =
-            crate::eos::effective_text_options(inner.model.text_options(), &options);
+        let text_options = crate::eos::effective_text_options(inner.model.text_options(), &options);
         inner.model.set_text_options(text_options);
         // La voix est chargee au premier usage, puis conservee : la relire a
         // chaque enonce coûterait 28 Mo de lecture par phrase.

@@ -4,7 +4,7 @@
 //! The model is trained on single sentences, so long inputs are split on sentence boundaries and
 //! regrouped into chunks that fit `max_tokens`.
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use std::collections::{BTreeMap, HashSet};
 
 pub trait TextTokenizer {

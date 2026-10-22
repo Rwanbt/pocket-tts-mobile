@@ -13,7 +13,7 @@
 //!                   generation est sans condition vocale (voix apprise du modele).
 //!   --no-normalize  ne pas appliquer la normalisation texte de ptts.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use ptts::checkpoint::{Checkpoint, ResolveOptions};
 use ptts::preprocess::{Lang, Normalize};
 use ptts::synth::{DeviceKind, Quant, SpeechOptions, Synth};
@@ -33,9 +33,8 @@ fn main() -> Result<()> {
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
-        let mut value = || -> Result<String> {
-            args.next().with_context(|| format!("{arg} needs a value"))
-        };
+        let mut value =
+            || -> Result<String> { args.next().with_context(|| format!("{arg} needs a value")) };
         match arg.as_str() {
             "--pack" => pack = PathBuf::from(value()?),
             "--text" => text = value()?,
@@ -66,7 +65,10 @@ fn main() -> Result<()> {
     // 1. Resoudre le pack : config.json + poids + tokenizer.
     let checkpoint = Checkpoint::locate(
         pack.to_str().context("the pack path is not valid UTF-8")?,
-        ResolveOptions { quant, weights: None },
+        ResolveOptions {
+            quant,
+            weights: None,
+        },
     )
     .with_context(|| format!("cannot locate the checkpoint in {}", pack.display()))?;
     println!(
@@ -112,7 +114,11 @@ fn main() -> Result<()> {
     if let Some(path) = &voice {
         let pcm = ptts::audio::load_mono_at(path, synth.voice_prompt_sample_rate())
             .with_context(|| format!("cannot read the voice prompt {}", path.display()))?;
-        println!("voice prompt: {} samples at {} Hz", pcm.len(), synth.voice_prompt_sample_rate());
+        println!(
+            "voice prompt: {} samples at {} Hz",
+            pcm.len(),
+            synth.voice_prompt_sample_rate()
+        );
         synth
             .add_voice_from_pcm("spike", &pcm)
             .context("cannot register the voice")?;
@@ -137,7 +143,11 @@ fn main() -> Result<()> {
     }
     let gen_ms = gen_start.elapsed().as_secs_f64() * 1e3;
     let duration_s = pcm.len() as f64 / sample_rate as f64;
-    let rtf = if duration_s > 0.0 { gen_ms / 1000.0 / duration_s } else { f64::NAN };
+    let rtf = if duration_s > 0.0 {
+        gen_ms / 1000.0 / duration_s
+    } else {
+        f64::NAN
+    };
 
     println!(
         "generated {:.2}s of audio in {:.0} ms (RTF={rtf:.3}, TTFA={:.0} ms), {} samples at {sample_rate} Hz",
@@ -149,7 +159,8 @@ fn main() -> Result<()> {
     if pcm.is_empty() {
         bail!("the generation produced no audio");
     }
-    let rms = (pcm.iter().map(|v| (*v as f64) * (*v as f64)).sum::<f64>() / pcm.len() as f64).sqrt();
+    let rms =
+        (pcm.iter().map(|v| (*v as f64) * (*v as f64)).sum::<f64>() / pcm.len() as f64).sqrt();
     let peak = pcm.iter().fold(0.0f32, |m, v| m.max(v.abs()));
     println!("audio: RMS={rms:.5} peak={peak:.4}");
 

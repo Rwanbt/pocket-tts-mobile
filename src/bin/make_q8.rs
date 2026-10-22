@@ -12,14 +12,18 @@
 //! `flow_lm.condition_provider.conditioners.speaker_wavs.sink`, le nom que
 //! `ptts` attend) : `ptts::loader::remap_key` ne fait pas ce renommage.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
-use xn::quantized::{GgmlDType, QStorage, QTensor, gguf_file};
-use xn::{CPU, TypedTensor, safetensors};
+use xn::quantized::{gguf_file, GgmlDType, QStorage, QTensor};
+use xn::{safetensors, TypedTensor, CPU};
 
 /// Poids des lineares du transformer du flow-LM, les seuls quantifies.
-const QUANT_SUFFIXES: &[&str] =
-    &["linear1.weight", "linear2.weight", "self_attn.in_proj.weight", "self_attn.out_proj.weight"];
+const QUANT_SUFFIXES: &[&str] = &[
+    "linear1.weight",
+    "linear2.weight",
+    "self_attn.in_proj.weight",
+    "self_attn.out_proj.weight",
+];
 
 fn should_quantize(name: &str) -> bool {
     name.starts_with("flow_lm.transformer.layers.")
@@ -50,9 +54,14 @@ fn as_is_qtensor(tensor: &TypedTensor<xn::CpuDevice>) -> Result<QTensor> {
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
-    let input = PathBuf::from(args.next().context("usage: make_q8 <in.safetensors> <out.gguf>")?);
-    let output =
-        PathBuf::from(args.next().context("usage: make_q8 <in.safetensors> <out.gguf>")?);
+    let input = PathBuf::from(
+        args.next()
+            .context("usage: make_q8 <in.safetensors> <out.gguf>")?,
+    );
+    let output = PathBuf::from(
+        args.next()
+            .context("usage: make_q8 <in.safetensors> <out.gguf>")?,
+    );
     let quant = match args.next().as_deref() {
         None | Some("q8") | Some("q8_0") => GgmlDType::Q8_0,
         Some("q6k") => GgmlDType::Q6K,
@@ -77,7 +86,10 @@ fn main() -> Result<()> {
         };
         qtensors.push((name.clone(), qtensor));
     }
-    println!("quantized the transformer linears of {} tensors", qtensors.len());
+    println!(
+        "quantized the transformer linears of {} tensors",
+        qtensors.len()
+    );
 
     let refs: Vec<(&str, &QTensor)> = qtensors.iter().map(|(n, t)| (n.as_str(), t)).collect();
     println!("writing {}", output.display());
