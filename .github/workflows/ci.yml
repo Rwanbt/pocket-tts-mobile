@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Un seul etat de la machine : les tests doivent passer sur une machine
+  # vierge, pas seulement sur celle du developpeur.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  check:
+    name: fmt, clippy and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: tests
+        run: cargo test
+
+      - name: The shared library exports the ABI
+        # L'application echoue au demarrage si un symbole manque. Ce controle
+        # reproduit ce que fait `PocketApi::load()` au demarrage de l'app.
+        run: |
+          set -euo pipefail
+          for sym in ptt_create ptt_destroy ptt_warmup ptt_set_text_options \
+                     ptt_stream_start ptt_stream_read ptt_stream_end ptt_free_audio; do
+            if ! nm -D --defined-only target/debug/libpocket_tts_mobile.so | grep -qw "$sym"; then
+              echo "::error::symbole absent de la bibliotheque partagée : $sym"
+              exit 1
+            fi
+            echo "ok $sym"
+          done
+
+  android:
+    name: android arm64-v8a
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK
+        uses: ndk-actions/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Install the Android target
+        run: rustup target add aarch64-linux-android
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-android-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build for Android
+        run: cargo ndk -t arm64-v8a build --release
+
+      - name: The Android library exports the ABI
+        run: |
+          set -euo pipefail
+          for sym in ptt_create ptt_destroy ptt_warmup ptt_set_text_options \
+                     ptt_stream_start ptt_stream_read ptt_stream_end ptt_free_audio; do
+            if ! nm -D --defined-only target/aarch64-linux-android/release/libpocket_tts_mobile.so | grep -qw "$sym"; then
+              echo "::error::symbole absent de la bibliotheque Android : $sym"
+              exit 1
+            fi
+            echo "ok $sym"
+          done
+
+      - name: Upload the library
+        uses: actions/upload-artifact@v4
+        with:
+          name: libpocket_tts_mobile-arm64-v8a
+          path: target/aarch64-linux-android/release/libpocket_tts_mobile.so
