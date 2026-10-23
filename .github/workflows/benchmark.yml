@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           echo "### Comparaison" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          for pack in bf16 q8; do
+          for pack in bf16; do
             size=$(du -sh "pack/$pack" | cut -f1)
             weights=$(du -h "pack/$pack"/model.* 2>/dev/null | cut -f1 | head -1 || echo "-")
             echo "- **$pack** : pack $size, poids $weights" >> "$GITHUB_STEP_SUMMARY"
@@ -97,7 +97,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| pack | ttfa (ms) | rtf | duree (s) | rms |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for pack in bf16 q8; do
+          for pack in bf16; do
             if [ -f "out/$pack/measurements.tsv" ]; then
               while IFS=$'\t' read -r ttfa rtf dur rms text; do
                 [ "$ttfa" = "ttfa_ms" ] && continue
