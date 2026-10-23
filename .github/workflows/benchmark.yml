@@ -76,7 +76,7 @@ jobs:
           cat out-bf16.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Attempt q8 pack (known issue: header too large)
+      - name: "Attempt q8 pack (known issue: header too large)"
         if: always()
         run: |
           set -euo pipefail
